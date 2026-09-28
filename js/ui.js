@@ -5,7 +5,7 @@
  * ===================================================================== */
 (function () {
   const $ = (id) => document.getElementById(id);
-  const SCREENS = ['loading', 'menu', 'character', 'settings', 'pause', 'gameover'];
+  const SCREENS = ['loading', 'menu', 'character', 'settings', 'pause', 'gameover', 'missions'];
 
   const store = {
     get(k, d) { try { const v = localStorage.getItem('cubeexpress.' + k); return v === null ? d : JSON.parse(v); } catch (e) { return d; } },
@@ -26,7 +26,9 @@
       tutLane: 'اسحب يميناً ويساراً لتغيير المسار', tutJump: 'اسحب للأعلى للقفز', tutSlide: 'اسحب للأسفل للانزلاق',
       tutLaneK: '← →', tutJumpK: '↑ / Space', tutSlideK: '↓',
       notEnough: 'ما معك عملات كافية', bought: 'صارت لك!',
-      pu: { magnet: 'مغناطيس!', shield: 'درع!', boost: 'انطلاق!', double: 'عملات مضاعفة!', invincible: 'نجمة!', lemonade: 'ليموناضة! نقاط وعملات مضاعفة' },
+      missions: 'المهام', lifetime: 'إحصائياتك', missionDone: 'مهمة منجزة!',
+      lRuns: 'جولات', lDist: 'مجموع المسافة', lCoins: 'مجموع العملات', lBest: 'أبعد مسافة', lJumps: 'قفزات', lLemons: 'ليمونات', lJet: 'طيران', lClose: 'نجاة بأعجوبة',
+      pu: { magnet: 'مغناطيس!', shield: 'درع!', boost: 'انطلاق!', double: 'عملات مضاعفة!', invincible: 'نجمة!', jetpack: 'جيت باك! طِر!', sneakers: 'حذاء النطّ!', lemonade: 'ليموناضة! نقاط وعملات مضاعفة' },
       m: 'م',
     },
     en: {
@@ -41,7 +43,9 @@
       tutLane: 'Swipe left / right to change lanes', tutJump: 'Swipe up to jump', tutSlide: 'Swipe down to slide',
       tutLaneK: '← →', tutJumpK: '↑ / Space', tutSlideK: '↓',
       notEnough: 'Not enough coins', bought: 'Unlocked!',
-      pu: { magnet: 'Magnet!', shield: 'Shield!', boost: 'Boost!', double: '2x Coins!', invincible: 'Star!', lemonade: 'Lemonade! 2x score & coins' },
+      missions: 'Missions', lifetime: 'Your stats', missionDone: 'Mission complete!',
+      lRuns: 'Runs', lDist: 'Total distance', lCoins: 'Total coins', lBest: 'Longest run', lJumps: 'Jumps', lLemons: 'Lemons', lJet: 'Flights', lClose: 'Close calls',
+      pu: { magnet: 'Magnet!', shield: 'Shield!', boost: 'Boost!', double: '2x Coins!', invincible: 'Star!', jetpack: 'Jetpack! Fly!', sneakers: 'Super Sneakers!', lemonade: 'Lemonade! 2x score & coins' },
       m: 'm',
     },
   };
@@ -103,7 +107,7 @@
           holder.appendChild(el);
           bars[k] = el;
         }
-        const frac = Math.max(0, Math.min(1, state.remaining(k) / (VR.CONFIG.POWERUPS[k] || VR.CONFIG[k.toUpperCase()]).duration));
+        const frac = Math.max(0, Math.min(1, state.remaining(k) / ((state.full && state.full[k]) || (VR.CONFIG.POWERUPS[k] || VR.CONFIG[k.toUpperCase()]).duration)));
         bars[k].style.setProperty('--p', frac.toFixed(3));
         bars[k].classList.toggle('low', state.remaining(k) < 2);
       }
@@ -169,11 +173,33 @@
       el.animate([{ opacity: 0, transform: 'translate(-50%, 20px)' }, { opacity: 1, transform: 'translate(-50%, 0)' }], { duration: 350, easing: 'ease-out' });
     },
 
+    // missions list (full on the missions screen, compact on game over)
+    missions(M, el = 'missionList') {
+      const coin = '<svg class="coin"><use href="#i-coin"/></svg>';
+      $(el).innerHTML = M.active.map(m => {
+        const tg = M.target(m), pr = Math.min(tg, Math.floor(m.progress)), f = Math.min(1, pr / tg);
+        return `<div class="mission${f >= 1 ? ' done' : ''}"><div class="txt">${M.text(m)}</div><div class="rw">${coin}+${fmt(M.reward(m))}</div>`
+          + `<div class="bar"><i style="width:${(f * 100).toFixed(1)}%"></i></div><div class="num">${fmt(pr)} / ${fmt(tg)}</div></div>`;
+      }).join('');
+      if (el !== 'missionList') return;
+      const L = M.life, m = t('m');
+      const cells = [['lRuns', fmt(L.runs)], ['lDist', fmt(L.dist) + ' ' + m], ['lBest', fmt(L.bestDist) + ' ' + m], ['lCoins', fmt(L.coins)],
+        ['lJumps', fmt(L.jumps)], ['lLemons', fmt(L.lemons)], ['lJet', fmt(L.jetpacks)], ['lClose', fmt(L.closeCalls)]];
+      $('lifeStats').innerHTML = cells.map(([k, v]) => `<div><b>${v}</b><span>${t(k)}</span></div>`).join('');
+    },
+    countdown(n) {
+      const el = $('countdown');
+      if (!n) { el.hidden = true; el.className = ''; return; }
+      el.hidden = false; el.className = '';
+      el.innerHTML = `<span>${n}</span>`; void el.offsetWidth; el.className = 'tick';
+    },
+
     menuStats(best, bank) { $('menuBest').textContent = fmt(best); $('menuBank').textContent = fmt(bank); $('shopBank').textContent = fmt(bank); },
 
     character(def, index, owned, selectedId, bank) {
       $('charName').textContent = lang === 'ar' ? def.name : def.nameEn;
       $('charTag').textContent = lang === 'ar' ? def.tagline : def.taglineEn;
+      $('charPerk').innerHTML = def.perk ? `<svg><use href="#i-bolt"/></svg>${lang === 'ar' ? def.perk.ar : def.perk.en}` : '';
       const dots = $('charDots');
       dots.innerHTML = VR.CHARACTERS.map((c, i) => `<i class="${i === index ? 'on' : ''} ${owned.has(c.id) ? 'owned' : ''}"></i>`).join('');
       const btn = $('charDone');

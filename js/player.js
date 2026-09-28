@@ -21,6 +21,43 @@
     return new T.CanvasTexture(cv);
   }
 
+  // ------------------------------------------------------------ jetpack model
+  // Twin fuel tanks on a back plate, chrome caps, nozzles and two flame
+  // cones (additive, flickering). Hangs off the chest bone; +Z is the back.
+  function buildJetpack() {
+    const g = new T.Group();
+    const mb = new VR.MB(3);
+    mb.box('paint', 0x2a2f3a, 0, 0.06, 0.2, 0.3, 0.3, 0.09, { r: 0.03 });                 // back plate
+    for (const sx of [-1, 1]) {
+      const x = sx * 0.095;
+      mb.cyl('paint', 0xff7a2f, x, 0.07, 0.27, 0.068, 0.068, 0.3, { seg: 18 });          // tank
+      mb.sphere('paint', 0xff7a2f, x, 0.22, 0.27, 0.068, { sy: 0.6, seg: 16 });         // rounded top
+      mb.cyl('chrome', 0xdfe5ec, x, 0.13, 0.27, 0.071, 0.071, 0.025, { seg: 18 });      // band
+      mb.cyl('chrome', 0xdfe5ec, x, 0.0, 0.27, 0.071, 0.071, 0.025, { seg: 18 });
+      mb.cyl('metal', 0x3a3f48, x, -0.12, 0.27, 0.05, 0.036, 0.07, { seg: 14 });         // nozzle
+      mb.cyl('metal', 0x2b2f35, x, -0.16, 0.27, 0.058, 0.05, 0.03, { seg: 14 });
+    }
+    mb.box('paint', 0xffd23f, 0, 0.13, 0.33, 0.06, 0.1, 0.02, { r: 0.008 });           // lemon-yellow badge
+    for (const sx of [-1, 1]) mb.box('paint', 0x1b1b1d, sx * 0.13, 0.07, 0.02, 0.035, 0.34, 0.38, { r: 0.01, rx: 0.08 }); // straps
+    g.add(mb.build({ receive: false }));
+    const flameMat = VR.keepAlpha(new T.MeshBasicMaterial({ color: new T.Color(3.2, 1.5, 0.45), transparent: true, depthWrite: false, fog: false }));
+    const coreMat = VR.keepAlpha(new T.MeshBasicMaterial({ color: new T.Color(3.5, 3.2, 2.4), transparent: true, depthWrite: false, fog: false }));
+    const flames = [];
+    for (const sx of [-1, 1]) {
+      const f = new T.Group();
+      const outer = new T.Mesh(new T.ConeGeometry(0.052, 0.34, 12, 1, true), flameMat); outer.rotation.x = Math.PI; outer.position.y = -0.17;
+      const inner = new T.Mesh(new T.ConeGeometry(0.028, 0.2, 10, 1, true), coreMat); inner.rotation.x = Math.PI; inner.position.y = -0.1;
+      f.add(outer, inner);
+      f.position.set(sx * 0.095, -0.17, 0.27);
+      g.add(f); flames.push(f);
+    }
+    const nozzles = [new T.Object3D(), new T.Object3D()];
+    nozzles.forEach((n, i) => { n.position.set((i ? 1 : -1) * 0.095, -0.3, 0.27); g.add(n); });
+    g.userData = { flames, nozzles };
+    g.visible = false;
+    return g;
+  }
+
   class Player {
     constructor(scene) {
       this.scene = scene;
@@ -58,11 +95,15 @@
       this.aura.position.y = 1.0; this.aura.scale.set(0.85, 1.25, 0.85); this.aura.visible = false;
       this.object.add(this.aura);
 
-      this.pRun = A.pose(); this.pAir = A.pose(); this.pOut = A.pose(); this.pIdle = A.pose(); this.pTmp = A.pose();
+      this.pRun = A.pose(); this.pAir = A.pose(); this.pOut = A.pose(); this.pIdle = A.pose(); this.pTmp = A.pose(); this.pFly = A.pose();
+      this.jetpack = buildJetpack();
+      this.flyT = 0;
       this.rig = null;
       this.tuftState = [0, 1, 2].map(() => ({ x: 0, z: 0, vx: 0, vz: 0 }));
       this._hp = new T.Vector3(); this._hv = new T.Vector3(); this._ha = new T.Vector3(); this._q = new T.Quaternion();
       this._anchor = new T.Vector3();
+      this._acc = new T.Vector3(); this._wind = new T.Vector3(); this.prevHead = new T.Vector3();
+      this._back = new T.Vector3(0, -0.4, 1).normalize(); this._side = new T.Vector3(1, 0, 0);
       this.events = {};                 // onStep(side, x, y, z), onSlideSpark()
       this.reset();
     }
@@ -71,6 +112,7 @@
       if (this.rig) { this.object.remove(this.rig.root); if (this.rig.scarf) this.object.remove(this.rig.scarf.mesh); }
       this.rig = VR.buildCharacter(def);
       this.object.add(this.rig.root);
+      this.rig.bones.chest.add(this.jetpack);
       if (this.rig.scarf) this.object.add(this.rig.scarf.mesh);
       this.hvInit = false;
     }
@@ -93,6 +135,8 @@
       this.airW = 0; this.slideW = 0; this.laneW = 0; this.startW = 1;
       this.jumpVariant = 0; this.spinT = -1; this.spinKind = null; this.jumpCount = 0;
       this.airTime = 0; this.accel = 0; this.cheer = 0;
+      this.flying = false; this.flyW = 0; this.flyH = 0;
+      if (this.jetpack) this.jetpack.visible = false;
       this.hvInit = false;
       this.object.position.set(0, 0, 0);
       this.object.rotation.set(0, 0, 0);
@@ -105,6 +149,7 @@
 
     action(a, game) {
       if (this.dead) return;
+      if (this.flying && (a === 'jump' || a === 'slide')) return;     // in the air on the jetpack
       switch (a) {
         case 'left':
         case 'right': {
@@ -115,7 +160,9 @@
         }
         case 'jump':
           if (this.grounded) {
-            this.vy = C.JUMP_VELOCITY; this.grounded = false; this.slideTimer = 0;
+            const boots = game && game.powerups && game.powerups.active('sneakers');
+            this.vy = C.JUMP_VELOCITY * (boots ? C.POWERUPS.sneakers.jumpFactor : 1); this.grounded = false; this.slideTimer = 0;
+            this.bigJump = !!boots;
             this.airTime = 0;
             this.jumpCount++;
             // pick a jump style: stride leap with the forward leg, sometimes a flip or a spin
@@ -155,6 +202,14 @@
       this.x += step;
       this.lateralVel = (this.x - this.prevX) / Math.max(dt, 1e-4);
 
+      if (this.flying) {
+        // jetpack: climb to cruising height and hold it
+        this.y += (this.flyH - this.y) * (1 - Math.exp(-dt * 3.2));
+        this.vy = 0; this.grounded = false; this.onTopOf = null; this.slideTimer = 0; this.pendingSlide = false;
+        this.airTime += dt;
+        this.animate(dt, speed, game);
+        return;
+      }
       this.vy -= C.GRAVITY * dt;
       const newY = this.y + this.vy * dt;
       const ground = world.surfaceAt(this.x, this.z, Math.max(this.y, newY), C.PLAYER_HALF_WIDTH);
@@ -237,6 +292,23 @@
       this.laneW += (laneT - this.laneW) * k(16);
       A.addScaled(out, A.P.lane, this.laneW * (1 - this.slideW * 0.6));
 
+      // jetpack flight pose
+      this.flyW += ((this.flying ? 1 : 0) - this.flyW) * k(this.flying ? 4 : 6);
+      this.flyT += dt;
+      if (this.flyW > 0.001) {
+        A.fly(this.pFly, this.flyT, this.laneW);
+        A.lerp(out, out, this.pFly, this.flyW);
+      }
+      const jp = this.jetpack;
+      jp.visible = this.flyW > 0.02 || this.flying;
+      if (jp.visible) {
+        const thrust = this.flying ? 1 : this.flyW;
+        for (const [i, f] of jp.userData.flames.entries()) {
+          const fl = 0.75 + Math.random() * 0.45 + Math.sin(this.flyT * 40 + i * 2) * 0.1;
+          f.scale.set(0.9 + Math.random() * 0.2, fl * thrust + 0.001, 0.9 + Math.random() * 0.2);
+        }
+      }
+
       // flip / spin tricks
       if (this.spinT >= 0) {
         this.spinT += dt;
@@ -258,7 +330,7 @@
       }
 
       A.apply(r, out);
-      const plantW = (1 - this.airW) * (1 - this.slideW);
+      const plantW = (1 - this.airW) * (1 - this.slideW) * (1 - this.flyW);
       A.plant(r, plantW, lift * plantW);
       // cartoon stretch while rising fast
       const st = clamp(this.vy / C.JUMP_VELOCITY, -1, 1) * this.airW;
@@ -284,9 +356,9 @@
       const r = this.rig; if (!r || dt <= 0) return;
       const head = r.bones.head;
       head.getWorldPosition(this._hp);
-      if (!this.hvInit) { this.prevHead = this._hp.clone(); this._hv.set(0, 0, 0); this.hvInit = true; }
+      if (!this.hvInit) { this.prevHead.copy(this._hp); this._hv.set(0, 0, 0); this.hvInit = true; }
       const vel = this._ha.subVectors(this._hp, this.prevHead).divideScalar(dt);
-      const acc = vel.clone().sub(this._hv).divideScalar(dt);
+      const acc = this._acc.copy(vel).sub(this._hv).divideScalar(dt);
       this._hv.copy(vel); this.prevHead.copy(this._hp);
       if (acc.length() > 80) acc.setLength(80);
       head.getWorldQuaternion(this._q).invert();
@@ -306,8 +378,8 @@
         r.bones.chest.localToWorld(this._anchor.set(0, 0.25, 0.08));
         this.object.worldToLocal(this._anchor);
         const inv = this.object.rotation.y;
-        const wind = running ? new T.Vector3(0, 6, 60 + speedN * 60) : new T.Vector3(Math.sin(performance.now() * 0.0007) * 4 - Math.sin(inv) * 3, 1, 5 * Math.cos(inv) + 2);
-        r.scarf.update(dt, this._anchor, new T.Vector3(0, -0.4, 1).normalize(), new T.Vector3(1, 0, 0), wind);
+        const wind = running ? this._wind.set(0, 6, 60 + speedN * 60) : this._wind.set(Math.sin(performance.now() * 0.0007) * 4 - Math.sin(inv) * 3, 1, 5 * Math.cos(inv) + 2);
+        r.scarf.update(dt, this._anchor, this._back, this._side, wind);
       }
     }
 

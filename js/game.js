@@ -34,6 +34,10 @@
       if (!VR.CHARACTERS.some(c => c.id === this.selectedId) || !this.owned.has(this.selectedId)) this.selectedId = 'hero';
       this.charIndex = Math.max(0, VR.CHARACTERS.findIndex(c => c.id === this.selectedId));
 
+      this.missions = new VR.Missions();
+      this.missions.onComplete = (m, reward) => this.onMissionDone(m, reward);
+      this.lemonNeed = C.LEMONADE.need; this.coinBonus = 0; this.coinFrac = 0;
+
       this.initRenderer();
       this.fx = new VR.FX(this.scene);
       this.powerups = new VR.PowerUpState();
@@ -148,6 +152,7 @@
       UI.fps(s.fps);
       this.resize();
       UI.store.set('settings', s);
+      if (this.envCache) requestAnimationFrame(() => this.warmup());
     }
 
     bindUI() {
@@ -161,6 +166,8 @@
       document.addEventListener('fullscreenchange', fsIcon); document.addEventListener('webkitfullscreenchange', fsIcon);
       UI.bind('fsBtn', () => { if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document); else this.enterFullscreen(); });
       UI.bind('againBtn', () => this.start());
+      UI.bind('missionsBtn', () => { UI.missions(this.missions); this.setState('missions'); });
+      UI.bind('missionsDone', () => this.setState('menu'));
       UI.bind('charBtn', () => { this.charIndex = VR.CHARACTERS.findIndex(c => c.id === this.selectedId); this.setState('character'); });
       UI.bind('charPrev', () => this.cycleChar(-1));
       UI.bind('charNext', () => this.cycleChar(1));
@@ -257,9 +264,9 @@
     // ------------------------------------------------------------ states
     setState(s) {
       this.state = s;
-      const map = { menu: 'menu', character: 'character', settings: 'settings', paused: 'pause', gameover: 'gameover', playing: null, dying: null, loading: 'loading' };
+      const map = { menu: 'menu', character: 'character', settings: 'settings', paused: 'pause', gameover: 'gameover', playing: null, dying: null, loading: 'loading', missions: 'missions', resuming: null };
       UI.show(map[s]);
-      UI.hud(s === 'playing' || s === 'paused' || s === 'dying');
+      UI.hud(s === 'playing' || s === 'paused' || s === 'dying' || s === 'resuming');
       VR.Input.setEnabled(s === 'playing');
       if (s !== 'playing') UI.tutorial(null);
       if (s === 'menu') { UI.menuStats(this.best, this.bank); VR.Audio.setMode('menu'); }
@@ -278,9 +285,10 @@
         UI.loadProgress(0.1 + 0.8 * (i / keys.length));
         if (i < keys.length) { setTimeout(stepBuild, 0); return; }
         this.world.update(0, this.player, C.SPEED_START, 0, this, true);
+        this.buildEnvCache();
         this.updateEnvironment(1, true);
         this.regenEnv();
-        this.renderer.compile(this.scene, this.camera);
+        this.warmup();
         UI.loadProgress(1);
         setTimeout(() => { this.setState('menu'); this.loop(); }, 120);
       };
@@ -298,6 +306,7 @@
       this.fx.clear();
       this.distance = 0; this.score = 0; this.coins = 0;
       this.lemons = 0; this.lemonsRun = 0;           // lemon meter (resets each run)
+      this.jetGrace = 0; VR.Audio.jet(false);
       this.multiplier = 1;
       this.speed = C.SPEED_START;
       this.lastBiome = null;
@@ -310,7 +319,7 @@
       this.camLook.set(0, 1.4, -C.CAMERA_LOOK_AHEAD);
       UI.clearPowerups();
       UI.setHUD(0, 0, 0, 1);
-      UI.lemons(0, C.LEMONADE.need, 0);
+      UI.lemons(0, this.lemonNeed, 0);
     }
 
     enterFullscreen() {
@@ -338,9 +347,31 @@
       if (this.settings.music) VR.Audio.startMusic();
       VR.Audio.setMusicVolume(1);
       this.tutorialOn = !UI.store.get('tutorialDone', false);
+      // character perks
+      const def = VR.CHARACTERS.find(c => c.id === this.selectedId) || VR.CHARACTERS[0];
+      this.powerups.mul = def.perkMul || {};
+      this.lemonNeed = def.lemonNeed || C.LEMONADE.need;
+      this.coinBonus = def.coinBonus || 0; this.coinFrac = 0;
+      UI.lemons(0, this.lemonNeed, 0);
+      this.missions.startRun();
+      this.lifeAcc = { dist: 0, coins: 0 };
     }
-    pause() { if (this.state !== 'playing') return; this.setState('paused'); VR.Audio.setMusicVolume(0.3); }
-    resume() { this.setState('playing'); this.clock.getDelta(); VR.Audio.setMusicVolume(1); }
+    pause() {
+      if (this.state === 'resuming') { clearTimeout(this.cdTimer); UI.countdown(0); this.setState('paused'); return; }
+      if (this.state !== 'playing') return; this.setState('paused'); VR.Audio.setMusicVolume(0.3); VR.Audio.jet(false); }
+    // 3-2-1 before the run continues, so you're not thrown straight into a train
+    resume() {
+      this.setState('resuming');
+      let n = 3;
+      const tick = () => {
+        if (this.state !== 'resuming') return;
+        if (n > 0) { UI.countdown(n); VR.Audio.play('tick'); n--; this.cdTimer = setTimeout(tick, 600); return; }
+        UI.countdown(0);
+        this.setState('playing'); this.clock.getDelta(); VR.Audio.setMusicVolume(1);
+        if (this.player.flying) VR.Audio.jet(true);
+      };
+      tick();
+    }
     toMenu() {
       this.resetRun();
       this.world.update(0, this.player, C.SPEED_START, 0, this, true);
@@ -356,6 +387,7 @@
       this.canContinue = true;                     // one continue per death
       this.player.groundAtDeath = this.world.surfaceAt(p.x, p.z, p.y + 0.01, 0.3).h;
       this.player.die();
+      VR.Audio.jet(false); this.vibrate([60, 40, 90]);
       this.deathCam = { t: 0, from: this.camera.position.clone() };
       VR.Audio.play('crash');
       VR.Audio.setMusicVolume(0.25);
@@ -365,6 +397,10 @@
       const isBest = this.score > this.best;
       if (isBest) { this.best = Math.floor(this.score); UI.store.set('best', this.best); }
       this.bank += this.coins; UI.store.set('bank', this.bank);
+      const acc = this.lifeAcc || (this.lifeAcc = { dist: 0, coins: 0 });
+      this.missions.endRun({ dist: this.distance - acc.dist, coins: this.coins - acc.coins });
+      acc.dist = this.distance; acc.coins = this.coins;
+      UI.missions(this.missions, 'goMissions');
       clearTimeout(this.goTimer);
       this.goTimer = setTimeout(() => {
         UI.gameOver({ score: this.score, dist: this.distance, coins: this.coins, best: this.best, isBest });
@@ -424,15 +460,67 @@
     onCoin(n, x, y, z) {
       const dbl = (this.powerups.active('double') ? 2 : 1) * (this.powerups.active('lemonade') ? 2 : 1);
       this.coins += n * dbl;
+      if (this.coinBonus) { this.coinFrac += n * dbl * this.coinBonus; const x = Math.floor(this.coinFrac); this.coins += x; this.coinFrac -= x; }
       this.score += C.COIN_POINTS * n * dbl * this.multiplier;
       VR.Audio.play('coin');
       this.fx.sparkle(x, y, z, 0xffd84a, 4, 2.2, -this.speed * 0.95);
       UI.bumpCoins();
     }
+    // ------------------------------------------------------------ jetpack
+    // Lift off to cruising height (above the trains, under the wires and the
+    // tunnel vault), lay a trail of coins in the air, and fly over everything.
+    startJetpack() {
+      const p = this.player, J = C.POWERUPS.jetpack, LW = C.LANE_WIDTH;
+      p.flying = true; p.flyH = J.height; p.slideTimer = 0;
+      this.missions.bump('jetpacks');
+      const flight = this.powerups.remaining('jetpack') || J.duration;
+      this.jetGrace = 0;
+      VR.Audio.play('jetStart'); VR.Audio.jet(true);
+      this.cameraImpulse(-0.25); this.fxFlash = 0.25;
+      this.vibrate(35);
+      // coin trail in the sky: follows a lane, then glides to a neighbour
+      const H = J.height + 0.95;
+      let lane = p.lane, x = lane * LW, z = p.z - 9;
+      const zEnd = p.z - Math.max(this.speed, 12) * (flight - 0.9) * 1.05;
+      let nextSwitch = z - 22 - Math.random() * 18, from = x, to = x, blend = 1;
+      while (z > zEnd) {
+        if (z < nextSwitch && blend >= 1) {
+          const opts = [lane - 1, lane + 1].filter(l => l >= -1 && l <= 1);
+          lane = opts[(Math.random() * opts.length) | 0];
+          from = x; to = lane * LW; blend = 0;
+          nextSwitch = z - 24 - Math.random() * 20;
+        }
+        if (blend < 1) { blend = Math.min(1, blend + 0.2); const e = blend * blend * (3 - 2 * blend); x = from + (to - from) * e; }
+        this.collect.spawnCoin(x, H + Math.sin(z * 0.18) * 0.22, z, null);
+        z -= 2.1;
+      }
+    }
+    updateJetpack(dt) {
+      const p = this.player, pu = this.powerups;
+      if (p.flying) {
+        // land a little before the fuel runs out, with a short safety window
+        if (pu.remaining('jetpack') < 0.45) {
+          p.flying = false; p.vy = 0;
+          this.jetGrace = C.POWERUPS.jetpack.grace; p.flash = this.jetGrace;
+          VR.Audio.jet(false); VR.Audio.play('whoosh');
+        } else {
+          // exhaust: sparks + smoke from both nozzles
+          for (const n of p.jetpack.userData.nozzles) {
+            n.getWorldPosition(this._v);
+            if (Math.random() < dt * 50) this.fx.sparkle(this._v.x, this._v.y, this._v.z, Math.random() < 0.5 ? 0xffb347 : 0xffe28a, 1, 1.5, this.speed * 0.25);
+            if (Math.random() < dt * 22) this.fx.dust(this._v.x, this._v.y - 0.1, this._v.z, 1, 0xd8d2cc, 0.6);
+          }
+        }
+      }
+      if (this.jetGrace > 0) this.jetGrace -= dt;
+    }
+    warmExtras(on) { this.player.jetpack.visible = on; }
+    vibrate(ms) { try { if (navigator.vibrate && this.settings.sfx) navigator.vibrate(ms); } catch (e) { /* not supported */ } }
+
     // lemon: fills the lemon meter; a full meter = LEMONADE rush
     onGem(x, y, z) {
       const L = C.LEMONADE, pu = this.powerups;
-      this.lemonsRun++;
+      this.lemonsRun++; this.missions.bump('lemons');
       this.score += C.GEM_POINTS * this.multiplier;
       this.fx.sparkle(x, y, z, 0xfff07a, 18, 4.5, -this.speed * 0.9);
       VR.Audio.play('gem');
@@ -443,12 +531,13 @@
         return;
       }
       this.lemons++;
-      if (this.lemons >= L.need) { this.startLemonade(); return; }
-      UI.lemons(this.lemons, L.need, 0);
+      if (this.lemons >= this.lemonNeed) { this.startLemonade(); return; }
+      UI.lemons(this.lemons, this.lemonNeed, 0);
       if (!UI.store.get('lemonTip', false)) { UI.store.set('lemonTip', true); UI.toast(UI.t('lemonTip'), 2200, true); }
     }
     startLemonade() {
       const p = this.player;
+      this.missions.bump('lemonade');
       this.lemons = 0;
       this.powerups.timers.lemonade = C.LEMONADE.duration;
       this.fx.ring(p.x, p.y + 1, p.z, 0xffe14a, 28, 7);
@@ -459,6 +548,9 @@
     }
     onPowerUp(type, x, y, z) {
       this.powerups.activate(type);
+      this.missions.bump('powerups');
+      if (type === 'jetpack') this.startJetpack();
+      if (type === 'sneakers') { VR.Audio.play('boing'); this.vibrate(20); }
       this.score += C.POWERUP_POINTS * this.multiplier;
       this.fx.sparkle(x, y, z, VR.POWERUP_COLORS[type], 24, 6, -this.speed * 0.9);
       this.fxFlash = 0.35;
@@ -473,12 +565,29 @@
       const b = VR.BIOMES[this.lastBiome || 'grove'];
       const col = b && b.ground.mat === 'snow' ? 0xf4f8ff : b && b.ground.mat === 'sand' ? 0xe8c890 : 0xb9ab97;
       if (this.Q.post || Math.random() < 0.5) this.fx.dust(x, y, z, 2, col, 0.6);
+      if (this.powerups.active('sneakers')) this.fx.sparkle(x, y + 0.05, z, 0xb9a2ff, 2, 1.2, -this.speed * 0.6);
+    }
+    onJump(p) {
+      this.missions.bump('jumps');
+      if (p.bigJump) {                       // super sneakers: springy launch
+        VR.Audio.play('boing');
+        this.fx.ring(p.x, p.y + 0.1, p.z, 0xb9a2ff, 16, 4);
+        this.fx.sparkle(p.x, p.y + 0.2, p.z, 0xb9a2ff, 10, 3, -this.speed * 0.5);
+      }
+    }
+    onSlide(p) { if (!p._slideCounted) this.missions.bump('slides'); }
+    onMissionDone(m, reward) {
+      this.bank += reward; UI.store.set('bank', this.bank);
+      VR.Audio.play('buy'); this.vibrate(30);
+      const txt = UI.t('missionDone') + '  +' + UI.fmt(reward);
+      if (this.state === 'playing') UI.toast(txt, 1800, true);
+      else UI.menuStats(this.best, this.bank);
     }
     onLand(p, impact) { this.fx.dust(p.x, p.y, p.z, 10, 0xc8b8a0, 1.4); }
     onSlideTick(p, dt) { if (Math.random() < dt * 40) this.fx.sparks(p.x + 0.1, p.y, p.z - 0.4, 1); if (Math.random() < dt * 20) this.fx.dust(p.x, p.y, p.z, 1, 0xc8b8a0, 0.8); }
 
     resolveCollisions() {
-      if (this.hitCooldown > 0 || VR.GOD) return;
+      if (this.hitCooldown > 0 || VR.GOD || this.player.flying || this.jetGrace > 0) return;
       const hit = this.world.collide(this.player);
       if (!hit) return;
       const pu = this.powerups;
@@ -524,11 +633,11 @@
 
       if (this.state === 'playing') this.updatePlaying(dt);
       else if (this.state === 'dying' || this.state === 'gameover') this.updateDeath(dt, rawDt);
-      else if (this.state === 'menu' || this.state === 'character' || this.state === 'loading') this.updateMenu(rawDt);
+      else if (this.state === 'menu' || this.state === 'character' || this.state === 'loading' || this.state === 'missions') this.updateMenu(rawDt);
       else if (this.state === 'settings' && this.settingsReturn !== 'paused') this.updateMenu(rawDt);
       else if (this.state === 'paused' || this.state === 'settings') { /* frozen frame */ }
 
-      if (this.state !== 'paused' && !(this.state === 'settings' && this.settingsReturn === 'paused')) {
+      if (this.state !== 'paused' && this.state !== 'resuming' && !(this.state === 'settings' && this.settingsReturn === 'paused')) {
         this.fx.update(dt);
         this.fx.ambient(dt, this.camera, this.speed);
       }
@@ -597,6 +706,7 @@
       this.tutorialTick();
 
       this.powerups.update(dt);
+      this.updateJetpack(dt);
       const boost = this.powerups.active('boost');
       const target = this.speedAt(this.distance) * (boost ? C.POWERUPS.boost.speedFactor : 1);
       this.speed += (target - this.speed) * Math.min(1, dt * 2.5);
@@ -635,7 +745,10 @@
       this.fx.updateStreaks(dt, this.camera, boost ? 1 : Math.max(0, sN - 0.6) * 1.2);
       UI.setHUD(this.score, this.distance, this.coins, this.multiplier);
       UI.setPowerups(this.powerups);
-      UI.lemons(this.lemons, C.LEMONADE.need, this.powerups.remaining('lemonade') / C.LEMONADE.duration);
+      UI.lemons(this.lemons, this.lemonNeed, this.powerups.remaining('lemonade') / C.LEMONADE.duration);
+      this.missions.runValue('distRun', this.distance);
+      this.missions.runValue('coinsRun', this.coins);
+      this.missions.runValue('scoreRun', this.score);
     }
 
     // coins etc. are hidden behind the menu so they don't float in front of the camera
@@ -650,6 +763,7 @@
     }
 
     onCloseCall(o) {
+      this.missions.bump('closeCalls');
       const bonus = 50 * this.multiplier;
       this.score += bonus;
       VR.Audio.play('closeCall');
@@ -660,6 +774,7 @@
 
     tutorialTick() {
       if (!this.tutorialOn) return;
+      if (this.player.flying) { if (this.tutStep) { UI.tutorial(null); this.tutStep = null; } return; }
       const t = this.runTime;
       const step = t < 0.8 ? null : t < 4 ? 'lane' : t < 7.2 ? 'jump' : t < 10.4 ? 'slide' : 'end';
       if (step !== this.tutStep) {
@@ -699,7 +814,7 @@
         if (this.lastBiome && this.state === 'playing') UI.biome(biome);
         this.lastBiome = chunk.biome;
         this.fx.setAmbient(biome.particles);
-        this.envDirty = 3;
+        this.envTimer = 0; this.envDirty = 1;
       }
       const L = biome.look;
       if (!this.cur) {
@@ -743,12 +858,50 @@
       this.sun.position.copy(this.sun.target.position).addScaledVector(ld, 60);
       // refresh image-based lighting a few times after a biome change
       this.envTimer += dt;
-      if (this.envDirty > 0 && this.envTimer > 1.1) { this.regenEnv(); this.envDirty--; this.envTimer = 0; }
+      // swap to the biome's pre-baked sky lighting once the sky has mostly blended over
+      if (this.envDirty > 0 && (this.envTimer > 1.2 || instant)) { this.regenEnv(); this.envDirty = 0; }
+    }
+    // PERF: image-based lighting for every biome is baked ONCE while loading
+    // (PMREM of the sky dome). Re-baking it during a run cost a long GPU
+    // stall at every biome change and at the start of every run.
+    buildEnvCache() {
+      this.envCache = {};
+      for (const key of VR.BIOME_ORDER) {
+        this.sky.update(0, this.camera, VR.BIOMES[key].look, 1);
+        this.envCache[key] = this.pmrem.fromScene(this.envScene, 0.02);
+      }
     }
     regenEnv() {
+      const key = this.lastBiome && this.envCache && this.envCache[this.lastBiome] ? this.lastBiome : null;
+      if (key) { this.scene.environment = this.envCache[key].texture; return; }
       if (this.envRT) this.envRT.dispose();
       this.envRT = this.pmrem.fromScene(this.envScene, 0.02);
       this.scene.environment = this.envRT.texture;
+    }
+
+    // PERF: compile every shader (incl. shadow-depth variants) and upload every
+    // texture during loading, so nothing compiles the first time a train type,
+    // biome prop, power-up, shield or effect shows up mid-run (that caused hitches).
+    warmup() {
+      const r = this.renderer, taken = [];
+      const pools = [this.world.pool, this.collect.pool];
+      for (const pool of pools) for (const key in pool.factories) {
+        const o = pool.get(key); o.position.set((taken.length % 5 - 2) * 3, 0, -12 - (taken.length / 5 | 0) * 2); taken.push([pool, o]);
+      }
+      const p = this.player, vis = [p.shieldMesh.visible, p.aura.visible, this.collect.coins.mesh.visible, this.collect.gems.mesh.visible];
+      p.shieldMesh.visible = p.aura.visible = this.collect.coins.mesh.visible = this.collect.gems.mesh.visible = true;
+      if (this.warmExtras) this.warmExtras(true);
+      const cam = this.camera, cp = cam.position.clone(), cq = cam.quaternion.clone();
+      cam.position.set(0, 5, 10); cam.lookAt(0, 1, -12); cam.updateMatrixWorld();
+      try {
+        r.compile(this.scene, cam);
+        if (this.Q.post) this.post.render(this.scene, cam, 0);      // also builds shadow-depth programs + uploads textures
+        else { r.setRenderTarget(null); r.render(this.scene, cam); }
+      } catch (e) { console.warn('warmup', e); }
+      cam.position.copy(cp); cam.quaternion.copy(cq);
+      for (const [pool, o] of taken) pool.release(o);
+      [p.shieldMesh.visible, p.aura.visible, this.collect.coins.mesh.visible, this.collect.gems.mesh.visible] = vis;
+      if (this.warmExtras) this.warmExtras(false);
     }
 
     // ------------------------------------------------------------ camera
@@ -764,9 +917,10 @@
       this.camBumpV += (-this.camBump * 60 - this.camBumpV * 10) * dt;
       this.camBump += this.camBumpV * dt;
       const sN = clamp((this.speed - C.SPEED_START) / (C.SPEED_MAX - C.SPEED_START), 0, 1);
-      const dist = C.CAMERA_DISTANCE + (this.portrait ? 0.1 : 0) + sN * 0.6 - this.fxRadial * 0.8;
+      const dist = C.CAMERA_DISTANCE + (this.portrait ? 0.1 : 0) + sN * 0.6 - this.fxRadial * 0.8 + p.flyW * (this.portrait ? -1.3 : 0.5);
       const tx = p.x * (this.portrait ? 0.82 : 0.72);
-      let ty = C.CAMERA_HEIGHT + p.y * 0.62 + this.camBump + (this.portrait ? 0.35 : 0) - p.slideW * 0.5;
+      // (on the jetpack the camera stays just under bridge girders / wires: ~4.95 m)
+      let ty = C.CAMERA_HEIGHT + p.y * (0.62 - p.flyW * 0.43) + this.camBump + (this.portrait ? 0.35 * (1 - p.flyW) : 0) - p.slideW * 0.5;
       // never rise into the tunnel vault (the camera would end up inside the hill)
       ty = Math.min(ty, ty + (VR.HALF_TRACK + 0.55 - ty) * this.tunnelDark);
       const tz = p.z + dist;
@@ -786,7 +940,7 @@
         cam.z += (tz - cam.z) * (1 - Math.exp(-dt * 14));
       }
       this.camLook.x += (p.x * 0.85 - this.camLook.x) * kk(7);
-      this.camLook.y += ((this.portrait ? 0.35 : 1.2) + p.y * 0.55 - this.camLook.y) * kk(7);
+      this.camLook.y += ((this.portrait ? 0.35 : 1.2) + p.y * (0.55 + p.flyW * 0.15) - this.camLook.y) * kk(7);
       this.camLook.z += (p.z - C.CAMERA_LOOK_AHEAD * sw - this.camLook.z) * (sw < 1 ? kk(10) : 1);
       if (this.shake > 0) {
         this.shake = Math.max(0, this.shake - dt);
@@ -837,8 +991,8 @@
       const vf = T.MathUtils.degToRad(this.baseFov);
       const d = 1.9 / (fr.frac * 2 * Math.tan(vf / 2));
       const dir = this._v.set(0.34 + Math.sin(a) * 0.16, 0.2, -1).normalize();
-      const look = new T.Vector3(0, 0.95, 0);
-      const target = look.clone().addScaledVector(dir, d);
+      const look = (this._mLook || (this._mLook = new T.Vector3())).set(0, 0.95, 0);
+      const target = (this._mTarget || (this._mTarget = new T.Vector3())).copy(look).addScaledVector(dir, d);
       if (!this.menuCamPos) { this.menuCamPos = target.clone(); this.menuLook = look.clone(); }
       this.menuCamPos.lerp(target, 1 - Math.exp(-dt * 3));
       this.menuLook.lerp(look, 1 - Math.exp(-dt * 3));

@@ -84,12 +84,21 @@
       }
       P.length = n;
       this.geo.setDrawRange(0, n);
-      for (const a of ['position', 'aColor', 'aSize', 'aRot', 'aShape']) this.geo.attributes[a].needsUpdate = true;
+      // PERF: upload only the live particles, and nothing at all when idle
+      if (n === 0 && this.lastN === 0) return;
+      this.lastN = n;
+      for (const a of ATTRS) {
+        const at = this.geo.attributes[a];
+        at.updateRange.offset = 0; at.updateRange.count = Math.max(1, n) * at.itemSize;
+        at.needsUpdate = true;
+      }
     }
     clear() { this.p.length = 0; this.geo.setDrawRange(0, 0); }
   }
 
+  const ATTRS = ['position', 'aColor', 'aSize', 'aRot', 'aShape'];
   const tmpC = new T.Color();
+  const _m4 = new T.Matrix4();
   function rgb(hex, mul = 1) { tmpC.setHex(hex); return { r: tmpC.r * mul, gg: tmpC.g * mul, b: tmpC.b * mul }; }
 
   class FX {
@@ -223,7 +232,7 @@
       this.streaks.material.opacity = this.streakAmt * 0.55;
       this.streaks.visible = this.streakAmt > 0.02;
       if (!this.streaks.visible) return;
-      const m = new T.Matrix4();
+      const m = _m4;
       this.streakData.forEach((s, i) => {
         if (!s.on || s.z > cam.position.z + 4) {
           const a = Math.random() * Math.PI * 2, r = 2.2 + Math.random() * 5;

@@ -251,7 +251,11 @@
       if (!safe && rnd() < ctx.powerupChance && plan.coins.length > 6) {
         const i = 3 + ((rnd() * (plan.coins.length - 6)) | 0);
         const c = plan.coins.splice(i, 1)[0];
-        plan.powerups.push({ type: PU_TYPES[(rnd() * PU_TYPES.length) | 0], x: c.x, y: Math.max(1.0, c.y), z: c.z });
+        const W = VR.CONFIG.POWERUP_WEIGHTS || {};
+        const tot = PU_TYPES.reduce((a, k) => a + (W[k] ?? 1), 0);
+        let r = rnd() * tot, type = PU_TYPES[0];
+        for (const k of PU_TYPES) { r -= W[k] ?? 1; if (r <= 0) { type = k; break; } }
+        plan.powerups.push({ type, x: c.x, y: Math.max(1.0, c.y), z: c.z });
       }
       return plan;
     },

@@ -71,12 +71,16 @@
     osc.start(t); osc.stop(t + dur + 0.05);
   }
   let noiseBuf = null;
-  function noise(dur, o = {}) {
+  function getNoise() {
     if (!noiseBuf) {
       noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 1, ctx.sampleRate);
       const d = noiseBuf.getChannelData(0);
       for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
     }
+    return noiseBuf;
+  }
+  function noise(dur, o = {}) {
+    getNoise();
     const t = ctx.currentTime + (o.when || 0);
     const s = ctx.createBufferSource(); s.buffer = noiseBuf; s.loop = true;
     const f = ctx.createBiquadFilter(); f.type = o.ft || 'lowpass';
@@ -92,7 +96,7 @@
   }
 
   // ------------------------------------------------------------ sound effects
-  let coinStep = 0, coinTime = 0, stepAlt = 0;
+  let coinStep = 0, coinTime = 0, stepAlt = 0, jet = null;
   const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
   const SYNTH = {
     step() { stepAlt ^= 1; noise(0.05, { f: stepAlt ? 900 : 700, vol: 0.05, pan: stepAlt ? 0.15 : -0.15 }); },
@@ -121,6 +125,8 @@
     newBest() { [0, 4, 7, 12, 7, 12, 16].forEach((s, i) => tone(523 * Math.pow(2, s / 12), 0.28, { type: 'triangle', vol: 0.1, when: i * 0.1 })); },
     buy() { for (let i = 0; i < 6; i++) tone(1318 * Math.pow(2, (i % 3) * 4 / 12), 0.12, { vol: 0.06, when: i * 0.05 }); },
     denied() { tone(220, 0.15, { type: 'square', vol: 0.05, lp: 900 }); tone(180, 0.2, { type: 'square', vol: 0.05, lp: 900, when: 0.1 }); },
+    jetStart() { noise(0.7, { ft: 'bandpass', f: 300, fTo: 2400, q: 0.7, vol: 0.3, attack: 0.05 }); tone(90, 0.6, { type: 'sawtooth', slide: 240, vol: 0.12, lp: 900 }); },
+    boing() { tone(220, 0.28, { type: 'triangle', slide: 880, vol: 0.12 }); tone(440, 0.2, { type: 'sine', slide: 1320, vol: 0.05, when: 0.03 }); },
     whoosh() { noise(0.3, { ft: 'bandpass', f: 800, fTo: 2500, q: 1, vol: 0.12 }); },
   };
 
@@ -188,6 +194,32 @@
       else if (SYNTH[name]) SYNTH[name](opts);
     },
     setMode(m) { mode = m; },
+    // continuous jetpack roar (filtered noise + low rumble, with flutter)
+    jet(on) {
+      if (!ensure()) return;
+      if (on && !jet && settings.sfx) {
+        const t = ctx.currentTime;
+        const src = ctx.createBufferSource(); src.buffer = getNoise(); src.loop = true;
+        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 520; bp.Q.value = 0.55;
+        const hs = ctx.createBiquadFilter(); hs.type = 'highshelf'; hs.frequency.value = 3000; hs.gain.value = -8;
+        const rum = ctx.createOscillator(); rum.type = 'sawtooth'; rum.frequency.value = 52;
+        const rlp = ctx.createBiquadFilter(); rlp.type = 'lowpass'; rlp.frequency.value = 180;
+        const rg = ctx.createGain(); rg.gain.value = 0.35;
+        const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.2, t + 0.35);
+        const lfo = ctx.createOscillator(); lfo.frequency.value = 11; const lg = ctx.createGain(); lg.gain.value = 0.035;
+        lfo.connect(lg); lg.connect(g.gain);
+        src.connect(bp); bp.connect(hs); hs.connect(g);
+        rum.connect(rlp); rlp.connect(rg); rg.connect(g);
+        g.connect(sfxBus);
+        src.start(); rum.start(); lfo.start();
+        jet = { g, stop: [src, rum, lfo] };
+      } else if (!on && jet) {
+        const j = jet; jet = null; const t = ctx.currentTime;
+        j.g.gain.cancelScheduledValues(t); j.g.gain.setValueAtTime(Math.max(0.0001, j.g.gain.value), t);
+        j.g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
+        for (const n of j.stop) n.stop(t + 0.45);
+      }
+    },
     startMusic() {
       if (!ensure()) return;
       if (files.__music) {

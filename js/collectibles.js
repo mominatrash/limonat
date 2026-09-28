@@ -34,9 +34,17 @@
       this.items[i] = null; this.active.delete(i); this.free.push(i);
       this.mesh.setMatrixAt(i, HIDE);
     }
-    clear() { for (const i of [...this.active]) this.kill(i); this.mesh.instanceMatrix.needsUpdate = true; this.mesh.count = 0; }
-    // only draw up to the highest live slot (hidden slots still cost triangles)
-    trim() { let m = -1; for (const i of this.active) if (i > m) m = i; this.mesh.count = m + 1; }
+    clear() {
+      for (const i of [...this.active]) this.kill(i);
+      const im = this.mesh.instanceMatrix; im.updateRange.offset = 0; im.updateRange.count = -1; im.needsUpdate = true;
+      this.mesh.count = 0;
+    }
+    // only draw (and upload) up to the highest live slot
+    trim() {
+      let m = -1; for (const i of this.active) if (i > m) m = i;
+      this.mesh.count = m + 1;
+      const im = this.mesh.instanceMatrix; im.updateRange.offset = 0; im.updateRange.count = Math.max(1, m + 1) * 16;
+    }
   }
 
   // ---------------------------------------------------------------- models
@@ -100,6 +108,24 @@
       }
       mb.box('paint', 0x2fa84f, 0.12, 0.08, 0.09, 0.2, 0.05, 0.02, { rz: 0.8 });
       mb.box('paint', 0x2fa84f, 0.12, 0.08, 0.09, 0.2, 0.05, 0.02, { rz: -0.8 });
+    },
+    jetpack(mb) {
+      mb.box('paint', 0x2a2f3a, 0, 0, -0.06, 0.34, 0.34, 0.08, { r: 0.03 });
+      for (const sx of [-1, 1]) {
+        mb.cyl('paint', 0xff7a2f, sx * 0.11, 0.0, 0.03, 0.085, 0.085, 0.34, { seg: 16 });
+        mb.sphere('paint', 0xff7a2f, sx * 0.11, 0.17, 0.03, 0.085, { sy: 0.6, seg: 14 });
+        mb.cyl('chrome', 0xdfe5ec, sx * 0.11, 0.06, 0.03, 0.088, 0.088, 0.03, { seg: 16 });
+        mb.cyl('metal', 0x3a3f48, sx * 0.11, -0.2, 0.03, 0.06, 0.045, 0.07, { seg: 12 });
+        mb.cone('neon', 0xffb347, sx * 0.11, -0.32, 0.03, 0.05, 0.16, { rx: Math.PI, seg: 10 });
+      }
+    },
+    sneakers(mb) {
+      mb.box('paint', 0x9b7bff, 0, 0, 0, 0.2, 0.14, 0.42, { r: 0.07 });               // upper
+      mb.box('paint', 0xffffff, 0, -0.09, -0.01, 0.22, 0.06, 0.46, { r: 0.025 });     // sole
+      mb.box('paint', 0x6fe3ff, 0, 0.02, 0.12, 0.21, 0.05, 0.1, { r: 0.02 });         // heel stripe
+      for (let i = 0; i < 3; i++) mb.box('paint', 0xffffff, 0, 0.075, -0.1 + i * 0.06, 0.12, 0.012, 0.018);  // laces
+      mb.torus('neon', 0xb9a2ff, 0, -0.17, 0, 0.1, 0.018, { rx: Math.PI / 2, seg: 20 });   // spring coil
+      mb.torus('neon', 0xb9a2ff, 0, -0.22, 0, 0.1, 0.018, { rx: Math.PI / 2, seg: 20 });
     },
     invincible(mb) {
       const sh = new T.Shape();
@@ -255,7 +281,11 @@
   class PowerUpState {
     constructor() { this.timers = {}; }
     reset() { this.timers = {}; }
-    activate(type) { this.timers[type] = C.POWERUPS[type].duration; }
+    // `mul` = per-character duration multipliers (perks), `full` = the timer's starting length (for the HUD ring)
+    activate(type) {
+      const d = C.POWERUPS[type].duration * ((this.mul && this.mul[type]) || 1);
+      this.timers[type] = d; (this.full || (this.full = {}))[type] = d;
+    }
     active(type) { return (this.timers[type] || 0) > 0; }
     remaining(type) { return Math.max(0, this.timers[type] || 0); }
     consume(type) { this.timers[type] = 0; }
@@ -263,5 +293,5 @@
     list() { return Object.keys(this.timers).filter(k => this.timers[k] > 0); }
   }
   VR.PowerUpState = PowerUpState;
-  VR.POWERUP_COLORS = { magnet: 0xff5a4f, shield: 0x4fb8ff, boost: 0xffb347, double: 0x6ee07a, invincible: 0xffd23f, lemonade: 0xffe14a };
+  VR.POWERUP_COLORS = { magnet: 0xff5a4f, shield: 0x4fb8ff, boost: 0xffb347, double: 0x6ee07a, invincible: 0xffd23f, lemonade: 0xffe14a, jetpack: 0xff8a3d, sneakers: 0x9b7bff };
 })();

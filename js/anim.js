@@ -186,6 +186,25 @@
   });
   A.P = P;
 
+  /**
+   * Jetpack flight: body pitched forward into the airflow, legs trailing and
+   * gently scissoring, arms swept back for balance, head up to see ahead.
+   * t = time (s), bank = -1..1 lane-change roll.
+   */
+  A.fly = function (p, t, bank = 0) {
+    A.zero(p);
+    const s1 = Math.sin(t * 5.2), s2 = Math.sin(t * 5.2 + 2.1), bob = Math.sin(t * 2.6);
+    p[1] = bob * 0.05;                                   // hover bob
+    p[3] = -(34 + bob * 3) * D;                          // pitch forward
+    p[5] = -bank * 24 * D;                               // bank into lane changes
+    A.set(p, 'spine', -6, 0, bank * 4); A.set(p, 'chest', -4);
+    A.set(p, 'neck', 26); A.set(p, 'head', 20 + bob * 2, -bank * 10, 0);
+    A.set(p, 'thighL', -10 + s1 * 7, 0, -5); A.set(p, 'shinL', -28 - s1 * 10); A.set(p, 'footL', -30);
+    A.set(p, 'thighR', -4 + s2 * 7, 0, 5); A.set(p, 'shinR', -40 - s2 * 10); A.set(p, 'footR', -34);
+    A.set(p, 'armL', -34 + s2 * 3, -10, -24 - bank * 10); A.set(p, 'foreL', 22); A.set(p, 'handL', 10, 0, 6);
+    A.set(p, 'armR', -34 + s1 * 3, 10, 24 - bank * 10); A.set(p, 'foreR', 22); A.set(p, 'handR', 10, 0, -6);
+  };
+
   /** Idle: breathing, weight shift, relaxed arms, looking around. */
   A.idle = function (p, t, look = 0) {
     A.zero(p);

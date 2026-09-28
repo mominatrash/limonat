@@ -54,7 +54,11 @@ VR.CONFIG = {
     boost:       { duration: 5,  label: 'Boost', speedFactor: 1.55 },
     double:      { duration: 12, label: '2x Coins' },
     invincible:  { duration: 7,  label: 'Star' },
+    jetpack:     { duration: 8,  label: 'Jetpack', height: 3.4, grace: 1.6 },
+    sneakers:    { duration: 12, label: 'Super Sneakers', jumpFactor: 1.4 },
   },
+  // how often each power-up appears (relative)
+  POWERUP_WEIGHTS: { magnet: 1, shield: 1, boost: 0.8, double: 1, invincible: 0.7, jetpack: 0.8, sneakers: 0.9 },
   MAGNET_RADIUS: 6,
 
   // ---------- Lemons -> Lemonade ----------

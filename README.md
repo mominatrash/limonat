@@ -30,6 +30,20 @@ generated in code.
 - **Hero colour**: the hero is shaded with its own neutral light and skips the scene's
   colour grading / tone mapping (alpha-0 mask, see `character.js` HERO COLOUR), so the
   original hero stays pure white in every biome and on the menu.
+- **Jetpack**: fly above the trains for 8 s on a coin trail in the sky (flight pose,
+  twin-flame jetpack model, exhaust, jet sound). Lands with a 1.6 s safety window.
+  `CONFIG.POWERUPS.jetpack`, `Game.startJetpack()`, `A.fly()` in anim.js.
+- **Super Sneakers**: jump 40% higher for 12 s (onto train roofs), springy FX.
+- **Missions**: 3 active goals with coin rewards that level up; lifetime stats
+  (`js/missions.js`). Shown in the menu and on the game-over card.
+- **Characters**: 9 skins, each with a perk (longer power-ups, 4-lemon lemonade,
+  +25% coins) and accessories (glasses, shades, neon goggles, headphones, crown,
+  lemon leaf). Defined in `VR.CHARACTERS` (character.js).
+- **Resume countdown** (3-2-1) and phone vibration on key moments.
+- **Performance**: sky lighting baked per biome at load, every shader pre-compiled
+  and textures uploaded during loading (no mid-run hitches), particle buffers only
+  upload live particles, no per-frame allocations in the hot paths, no live blur
+  behind the in-game HUD.
 - **Gameplay extras**: close-call bonus, skins shop (buy with banked coins), first-run
   tutorial, slow-motion death camera, tap the hero in the menu to make him jump.
 - **UI**: new Arabic-first interface (English toggle), glass panels, power-up ring timers.

@@ -36,24 +36,36 @@
     cap: 0x1b1b1d, hair: 0xfafaf8, detail: 0xb4b9c5, ink: 0x161616,
   };
 
+  // perk: text shown in the shop. perkMul = power-up duration multipliers,
+  // lemonNeed = lemons for a Lemonade, coinBonus = extra share of coins.
+  // acc = accessories: glasses | shades | headphones | crown | leaf | visor
   VR.CHARACTERS = [
-    { id: 'hero', name: 'البطل', nameEn: 'Hero', tagline: 'الشخصية الأصلية', taglineEn: 'The original runner', price: 0, palette: HERO },
+    { id: 'hero', name: 'البطل', nameEn: 'Hero', tagline: 'الشخصية الأصلية', taglineEn: 'The original runner', price: 0, palette: HERO,
+      perk: { ar: 'بطاقة البداية: درع أطول ‎+20%', en: 'Starter perk: shield +20%' }, perkMul: { shield: 1.2 } },
     { id: 'lemon', name: 'ليموني', nameEn: 'Lemony', tagline: 'حامض وسريع', taglineEn: 'Sour and speedy', price: 400,
-      palette: Object.assign({}, HERO, { shirt: 0xffd83a, shorts: 0x2f8a45, cap: 0x2f8a45, sole: 0xffc21a, detail: 0xd9a90f }) },
+      palette: Object.assign({}, HERO, { shirt: 0xffd83a, shorts: 0x2f8a45, cap: 0x2f8a45, sole: 0xffc21a, detail: 0xd9a90f }),
+      acc: ['leaf'], perk: { ar: 'ليموناضة بـ 4 ليمونات بس', en: 'Lemonade with only 4 lemons' }, lemonNeed: 4 },
     { id: 'olive', name: 'زيتون', nameEn: 'Olive', tagline: 'من كروم الجبل', taglineEn: 'From the hill groves', price: 900,
       palette: Object.assign({}, HERO, { shirt: 0x7b8c3c, shorts: 0xe9dfc7, cap: 0x3a2f24, shoe: 0x8a5a33, sole: 0x3a2f24, detail: 0x55632a }),
-      scarf: [0xf4f3ef, 0x1b1b1d] },
+      scarf: [0xf4f3ef, 0x1b1b1d], perk: { ar: 'الدرع يدوم ‎+60%', en: 'Shield lasts +60%' }, perkMul: { shield: 1.6 } },
     { id: 'mint', name: 'نعنع', nameEn: 'Mint', tagline: 'بارد على السكة', taglineEn: 'Cool on the rails', price: 1500,
-      palette: Object.assign({}, HERO, { shirt: 0x6fdcc0, shorts: 0x23443d, cap: 0xff6b5b, shoe: 0xffffff, sole: 0xff6b5b, detail: 0x3fae93 }) },
+      palette: Object.assign({}, HERO, { shirt: 0x6fdcc0, shorts: 0x23443d, cap: 0xff6b5b, shoe: 0xffffff, sole: 0xff6b5b, detail: 0x3fae93, acc1: 0xff6b5b, acc2: 0x23443d }),
+      acc: ['headphones'], perk: { ar: 'المغناطيس يدوم ‎+60%', en: 'Magnet lasts +60%' }, perkMul: { magnet: 1.6 } },
     { id: 'night', name: 'ليل', nameEn: 'Night', tagline: 'يركض تحت النجوم', taglineEn: 'Runs under the stars', price: 2500,
-      palette: Object.assign({}, HERO, { shirt: 0x262c3d, shorts: 0x3b4560, cap: 0xeceae4, hair: 0xbdf2ff, shoe: 0x262c3d, sole: 0x55d6ff, detail: 0x55d6ff }),
-      scarf: [0xe8433a, 0xb3261e] },
+      palette: Object.assign({}, HERO, { shirt: 0x262c3d, shorts: 0x3b4560, cap: 0xeceae4, hair: 0xbdf2ff, shoe: 0x262c3d, sole: 0x55d6ff, detail: 0x55d6ff, acc1: 0x55d6ff }),
+      scarf: [0xe8433a, 0xb3261e], acc: ['visor'], perk: { ar: 'النجمة تدوم ‎+60%', en: 'Star lasts +60%' }, perkMul: { invincible: 1.6 } },
+    { id: 'melon', name: 'بطيخة', nameEn: 'Melon', tagline: 'حمرا من جوّا', taglineEn: 'Red on the inside', price: 3200,
+      palette: Object.assign({}, HERO, { shirt: 0xe8433a, shorts: 0x2f8a45, cap: 0x1f6b35, hair: 0xfafaf8, shoe: 0x2f8a45, sole: 0x1b1b1d, detail: 0x1b1b1d, acc1: 0x1b1d24 }),
+      acc: ['shades'], perk: { ar: 'حذاء النطّ يدوم ‎+60%', en: 'Super Sneakers last +60%' }, perkMul: { sneakers: 1.6 } },
     { id: 'sunset', name: 'غروب', nameEn: 'Sunset', tagline: 'بلون آخر النهار', taglineEn: 'Colours of dusk', price: 4000,
-      palette: Object.assign({}, HERO, { shirt: 0xff7a45, shorts: 0x5a2d82, cap: 0xffd23f, shoe: 0xffd23f, sole: 0x5a2d82, detail: 0xd9542a }),
-      scarf: [0xffd23f, 0xff7a45] },
+      palette: Object.assign({}, HERO, { shirt: 0xff7a45, shorts: 0x5a2d82, cap: 0xffd23f, shoe: 0xffd23f, sole: 0x5a2d82, detail: 0xd9542a, acc1: 0x5a2d82 }),
+      scarf: [0xffd23f, 0xff7a45], acc: ['glasses'], perk: { ar: 'الانطلاق والعملات المضاعفة ‎+50%', en: 'Boost & 2x Coins last +50%' }, perkMul: { boost: 1.5, double: 1.5 } },
+    { id: 'astro', name: 'رائد فضاء', nameEn: 'Astro', tagline: 'وُلد ليطير', taglineEn: 'Born to fly', price: 6000,
+      palette: Object.assign({}, HERO, { shirt: 0xf1f3f7, shorts: 0x3d6fd9, cap: 0x3d6fd9, hair: 0xfafaf8, shoe: 0xff7a2f, sole: 0x3d6fd9, detail: 0x8fa3c7, acc1: 0x6fd8ff }),
+      acc: ['visor', 'headphones'], perk: { ar: 'الجيت باك يدوم ‎+50%', en: 'Jetpack lasts +50%' }, perkMul: { jetpack: 1.5 } },
     { id: 'gold', name: 'الليمونة الذهبية', nameEn: 'Golden Lemon', tagline: 'لأبطال المسافات', taglineEn: 'For distance legends', price: 8000,
-      palette: Object.assign({}, HERO, { shirt: 0xffc93c, shorts: 0x1b1b1d, cap: 0xffc93c, hair: 0xfff3b0, shoe: 0x1b1b1d, sole: 0xffc93c, detail: 0xd99a12 }),
-      scarf: [0x1b1b1d, 0xffc93c] },
+      palette: Object.assign({}, HERO, { shirt: 0xffc93c, shorts: 0x1b1b1d, cap: 0xffc93c, hair: 0xfff3b0, shoe: 0x1b1b1d, sole: 0xffc93c, detail: 0xd99a12, acc1: 0xffc93c }),
+      scarf: [0x1b1b1d, 0xffc93c], acc: ['crown'], perk: { ar: 'عملات إضافية ‎+25%', en: '+25% coins' }, coinBonus: 0.25 },
   ];
 
   // ------------------------------------------------------------ materials
@@ -139,9 +151,10 @@
   }
 
   // ------------------------------------------------------------ body parts
-  function headParts(P) {
+  function headParts(P, acc = []) {
     return partMeshes((mb) => {
       const R = DIM.headR, cy = 0.23;
+      accessories(mb, P, acc, R, cy);
       mb.sphere('toon', P.skin, 0, cy, 0, R, { sx: 1.07, sy: 1.0, sz: 0.97, seg: 40, hseg: 28 });
       // beanie: a cap shell tilted back a little, rim, and the knot on top
       const CT = 0.15, CL = Math.PI * 0.36, CR = R * 1.045;
@@ -171,6 +184,52 @@
       // soft cheek/side shading like the drawing
       mb.sphere('ink', P.detail, 0.196, cy - 0.077, -0.177, 0.045, { sy: 0.55, sz: 0.2, ry: -0.785, rx: -0.2, order: 'YXZ', seg: 12 });
     });
+  }
+
+  // ------------------------------------------------------------ accessories
+  // eyes sit at yaw +0.36 / -0.40 (radians) on the head sphere's front (-Z)
+  function onHead(R, cy, yaw, pitch, k) {
+    return new T.Vector3(Math.sin(yaw) * Math.cos(pitch) * R * 1.07 * k, cy + Math.sin(pitch) * R * k, -Math.cos(yaw) * Math.cos(pitch) * R * 0.97 * k);
+  }
+  function accessories(mb, P, acc, R, cy) {
+    const A1 = P.acc1 ?? 0x1b1d24, A2 = P.acc2 ?? 0x2a2f3a;
+    for (const a of acc) {
+      if (a === 'glasses' || a === 'shades' || a === 'visor') {
+        // round frames (glasses), dark lenses (shades) or glowing neon goggles (visor)
+        const frame = a === 'visor' ? 0x2a2f3a : A1;
+        for (const [yaw, s] of [[0.36, 1], [-0.4, 1.04]]) {
+          const q = onHead(R, cy, yaw, 0.02, 1.06), o = { rx: 0.02, ry: -yaw, order: 'YXZ' };
+          if (a === 'shades') mb.sphere('toon', 0x16181f, q.x, q.y, q.z, 0.105 * s, Object.assign({ sy: 0.82, sz: 0.28, seg: 20 }, o));
+          if (a === 'visor') mb.sphere('ink', A1, q.x, q.y, q.z, 0.1 * s, Object.assign({ sy: 0.62, sz: 0.26, seg: 20 }, o));
+          mb.torus('toon', frame, q.x, q.y, q.z, 0.104 * s, a === 'visor' ? 0.02 : 0.013, Object.assign({ seg: 24, sy: a === 'visor' ? 0.64 : 0.84 }, o));
+        }
+        const b = onHead(R, cy, -0.02, 0.05, 1.07);
+        mb.box('toon', frame, b.x, b.y, b.z, 0.06, 0.016, 0.016, { ry: 0.02 });
+        if (a === 'visor') mb.torus('toon', frame, 0, cy + 0.02, 0, R * 1.09, 0.012, { rx: Math.PI / 2, sx: 1.07, sz: 0.97, seg: 36 });   // strap
+      }
+      if (a === 'headphones') {
+        // band over the beanie + two ear cups
+        mb.torus('toon', A2, 0, cy + 0.02, 0.01, R * 1.16, 0.016, { arc: Math.PI, sx: 1.03, seg: 28 });
+        for (const sx of [-1, 1]) {
+          mb.cyl('toon', A1, sx * R * 1.1, cy + 0.0, 0.01, 0.07, 0.07, 0.05, { rz: Math.PI / 2, seg: 18 });
+          mb.cyl('toon', A2, sx * R * 1.15, cy + 0.0, 0.01, 0.052, 0.052, 0.03, { rz: Math.PI / 2, seg: 16 });
+        }
+      }
+      if (a === 'crown') {
+        const y0 = cy + R * 1.0;
+        mb.cyl('toon', A1, 0, y0, 0.03, 0.12, 0.13, 0.06, { seg: 20 });
+        for (let i = 0; i < 6; i++) {
+          const ang = i / 6 * Math.PI * 2;
+          mb.cone('toon', A1, Math.sin(ang) * 0.115, y0 + 0.07, 0.03 + Math.cos(ang) * 0.115, 0.03, 0.09, { seg: 6 });
+          mb.sphere('ink', i % 2 ? 0xff5a4f : 0x5ad1ff, Math.sin(ang) * 0.128, y0, 0.03 + Math.cos(ang) * 0.128, 0.017, { seg: 8 });
+        }
+      }
+      if (a === 'leaf') {
+        // a little lemon leaf sprouting from the beanie
+        mb.sphere('toon', 0x3fae4f, -0.07, cy + R * 1.02, 0.02, 0.07, { sx: 0.45, sy: 0.14, sz: 1, rx: 0.5, ry: 0.6, seg: 12 });
+        mb.cyl('toon', 0x1f6b35, -0.04, cy + R * 0.99, 0.03, 0.008, 0.01, 0.07, { rz: 0.5, seg: 6 });
+      }
+    }
   }
 
   function tuftPart(P, i) {
@@ -352,7 +411,7 @@
     B.footL = bone('footL', B.shinL, 0, -DIM.shin, 0);
     B.footR = bone('footR', B.shinR, 0, -DIM.shin, 0);
 
-    B.head.add(headParts(P));
+    B.head.add(headParts(P, def.acc || []));
     B.chest.add(chestParts(P));
     B.spine.add(spineParts(P));
     B.hips.add(hipsParts(P));

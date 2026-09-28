@@ -62,8 +62,8 @@
       const x = side * (HALF_TRACK + 0.9);
       mb.box('metal', 0x5d646d, x, 3.4, z, 0.26, 6.8, 0.26);
       mb.box('concrete', 0x8e8a84, x, 0.1, z, 0.7, 0.4, 0.7);
-      mb.box('metal', 0x5d646d, x - side * (HALF_TRACK + 0.8) / 1, 6.4, z, HALF_TRACK * 2 + 1.6, 0.14, 0.14);
-      mb.box('metal', 0x5d646d, x - side * 1.3, 5.7, z, 2.6, 0.08, 0.08, { rz: side * 0.5 });
+      mb.box('wire', 0x5d646d, x - side * (HALF_TRACK + 0.8) / 1, 6.4, z, HALF_TRACK * 2 + 1.6, 0.14, 0.14);   // gantry beam
+      mb.box('wire', 0x5d646d, x - side * 1.3, 5.7, z, 2.6, 0.08, 0.08, { rz: side * 0.5 });
       for (const lane of [-1, 0, 1]) mb.box('wire', 0x3a3f45, lane * LW, 6.0, z, 0.05, 0.8, 0.05);
     }
     for (const lane of [-1, 0, 1]) {
