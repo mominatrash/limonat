@@ -35,7 +35,7 @@ generated in code.
   `CONFIG.POWERUPS.jetpack`, `Game.startJetpack()`, `A.fly()` in anim.js.
 - **Super Sneakers**: jump 40% higher for 12 s (onto train roofs), springy FX.
 - **Missions**: 3 active goals with coin rewards that level up; lifetime stats
-  (`js/missions.js`). Shown in the menu and on the game-over card.
+  (end of `js/ui.js`). Shown in the menu and on the game-over card.
 - **Characters**: 9 skins, each with a perk (longer power-ups, 4-lemon lemonade,
   +25% coins) and accessories (glasses, shades, neon goggles, headphones, crown,
   lemon leaf). Defined in `VR.CHARACTERS` (character.js).
