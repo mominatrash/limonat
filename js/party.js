@@ -136,12 +136,86 @@
     sp.renderOrder = 21; sp.scale.set(0.9, 0.9, 1); return sp;
   }
 
+
+  // ------------------------------------------------------------ voice chat
+  // One audio line between the two phones (WebRTC), set up as soon as the
+  // room links; its offer/answer travel over the game's own connection.
+  // Turning the mic on/off just swaps the track in (no renegotiation) and
+  // really stops the microphone when it's off. The friend's voice can be
+  // muted on your side at any time.
+  class Voice {
+    constructor(send, onChange) { this.send = send; this.onChange = onChange; this.pc = null; this.tx = null; this.q = []; this.mic = null; this.audio = null; this.speaker = true; }
+    get micOn() { return !!this.mic; }
+    start(offer) {
+      this.stop();
+      if (!window.RTCPeerConnection) return;
+      const pc = this.pc = new RTCPeerConnection({ iceServers: ICE });
+      pc.onicecandidate = (e) => { if (e.candidate && this.pc === pc) this.send({ t: 'rtc', c: e.candidate.toJSON() }); };
+      pc.ontrack = (e) => this.attach(e.streams && e.streams[0] ? e.streams[0] : new MediaStream([e.track]));
+      if (offer) {
+        this.tx = pc.addTransceiver('audio', { direction: 'sendrecv' });
+        pc.createOffer().then(o => pc.setLocalDescription(o)).then(() => { if (this.pc === pc) this.send({ t: 'rtc', sdp: pc.localDescription.toJSON() }); }).catch(() => {});
+      }
+    }
+    async signal(m) {
+      if (!this.pc && m.sdp && m.sdp.type === 'offer') this.start(false);
+      const pc = this.pc; if (!pc) return;
+      try {
+        if (m.sdp) {
+          await pc.setRemoteDescription(m.sdp);
+          if (m.sdp.type === 'offer') {
+            this.tx = pc.getTransceivers()[0] || null;
+            if (this.tx) { this.tx.direction = 'sendrecv'; if (this.mic) await this.tx.sender.replaceTrack(this.mic.getAudioTracks()[0]); }
+            await pc.setLocalDescription(await pc.createAnswer());
+            if (this.pc === pc) this.send({ t: 'rtc', sdp: pc.localDescription.toJSON() });
+          }
+          const q = this.q; this.q = [];
+          for (const c of q) await pc.addIceCandidate(c);
+        } else if (m.c) {
+          if (pc.remoteDescription) await pc.addIceCandidate(m.c); else this.q.push(m.c);
+        }
+      } catch (e) { /* a failed candidate is fine: others remain */ }
+    }
+    async setMic(on) {
+      if (on && !this.mic) {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) throw { name: 'NotSupportedError' };
+        const st = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
+        this.mic = st;
+        if (this.tx) { try { await this.tx.sender.replaceTrack(st.getAudioTracks()[0]); } catch (e) { /* */ } }
+      } else if (!on && this.mic) {
+        if (this.tx) { try { await this.tx.sender.replaceTrack(null); } catch (e) { /* */ } }
+        this.mic.getTracks().forEach(t => t.stop()); this.mic = null;
+      }
+      this.send({ t: 'mic', on: !!this.mic });
+      this.onChange();
+    }
+    attach(stream) {
+      if (!this.audio) {
+        const a = this.audio = document.createElement('audio');
+        a.autoplay = true; a.setAttribute('playsinline', ''); a.style.display = 'none';
+        document.body.appendChild(a);
+      }
+      this.audio.srcObject = stream; this.audio.muted = !this.speaker;
+      this.kick();
+    }
+    // phones only start sound after a tap: retry on the next one
+    kick() { const a = this.audio; if (a && a.srcObject && a.paused) { const r = a.play(); if (r && r.catch) r.catch(() => {}); } }
+    setSpeaker(on) { this.speaker = on; if (this.audio) this.audio.muted = !on; this.onChange(); }
+    stop() {
+      if (this.pc) { try { this.pc.close(); } catch (e) { /* */ } }
+      this.pc = null; this.tx = null; this.q = [];
+      if (this.audio) this.audio.srcObject = null;
+      if (this.mic) { this.mic.getTracks().forEach(t => t.stop()); this.mic = null; }
+    }
+  }
+
   class Party {
     constructor(game) {
       this.name = 'party'; this.g = game;
       this.net = null; this.role = null; this.code = ''; this.mode = 'race';
       this.meReady = false; this.fr = null; this.rtt = 0;
       this.inRun = false; this.av = null; this.buf = []; this.floats = []; this.taken = [];
+      this.voice = new Voice((m) => this.send(m), () => { this.renderVoice(); if (this.g.state === 'party') this.render(); }); this.frMic = false;
       this.pendingCode = (/[#&]room=([A-Za-z0-9]{4,6})/.exec(location.hash) || [])[1] || null;
       UI.addStrings({
         party: 'مع صاحب', ptTitle: 'العب مع صاحبك', ptHost: 'اعمل غرفة', ptJoin: 'ادخل', ptCodePh: 'كود الغرفة', ptOr: 'أو عندك كود؟',
@@ -151,7 +225,7 @@
         ptLeave: 'اطلع', ptYou: 'إنت', ptFriend: 'صاحبك', ptJoined: 'دخل صاحبك', ptLeft: 'صاحبك طلع من الغرفة', ptLost: 'انقطع الاتصال مع صاحبك',
         ptErrRoom: 'ما لقينا غرفة بهالكود، تأكد منه', ptErrNet: 'ما قدرنا نوصل لصاحبك. جرّبوا واي فاي أو غيّروا الشبكة', ptErrSrv: 'في مشكلة بالإنترنت أو بسيرفر الربط، جرّب كمان شوي', ptErrOld: 'هالمتصفح ما بيدعم اللعب مع صاحب', ptFull: 'الغرفة مليانة',
         ptCopied: 'تم نسخ الرابط!', ptShareText: 'تعال العب معي ليمونات! كود الغرفة:',
-        ptFell: 'وقعت!', ptWatching: 'عم تتفرج على {n}', ptBehind: 'وراك', ptAhead: 'قدامك', ptStillRun: 'وقعت… خلينا نشوف إذا بيسبقك', ptCanSave: 'صاحبك بيقدر يرجّعك!', ptSaveHow: 'لازم يجمع {n} ليمونات خلال {s} ثانية',
+        ptFell: 'وقعت!', ptWatching: 'عم تتفرج على {n}', vMicOn: 'المايك شغال', vMicOff: 'المايك مطفي', vSpkOn: 'صوت صاحبك', vSpkOff: 'صاحبك مكتوم', vDenied: 'لازم تسمح للمايك من إعدادات المتصفح', vNoMic: 'ما قدرنا نشغل المايك على هالجهاز', ptBehind: 'وراك', ptAhead: 'قدامك', ptStillRun: 'وقعت… خلينا نشوف إذا بيسبقك', ptCanSave: 'صاحبك بيقدر يرجّعك!', ptSaveHow: 'لازم يجمع {n} ليمونات خلال {s} ثانية',
         ptNoSave: 'ما لحق يرجّعك… استنى لآخر الجولة', ptFriendFell: 'وقع صاحبك!', ptSaveHim: 'اجمع {n} 🍋 خلال {s} ث عشان ترجّعه', ptSaved: 'رجّعت صاحبك! 💪', ptSavedMe: 'صاحبك رجّعك! 💪', ptTooLate: 'ما لحقت ترجّعه 😢', ptBack: 'رجع صاحبك للجولة',
         ptWin: 'فزت! 🏆', ptLose: 'صاحبك فاز هالمرة', ptTie: 'تعادل!', ptTeam: 'نتيجة الفريق', ptTeamS: 'الفريق', ptAgain: 'جولة ثانية', ptReward: 'مكافأة', ptFrReady: 'صاحبك جاهز لجولة ثانية',
       }, {
@@ -162,7 +236,7 @@
         ptLeave: 'Leave', ptYou: 'You', ptFriend: 'Friend', ptJoined: 'Your friend joined', ptLeft: 'Your friend left the room', ptLost: 'Lost the connection to your friend',
         ptErrRoom: 'No room with that code — check it', ptErrNet: "Couldn't reach your friend. Try Wi-Fi or another network", ptErrSrv: 'Internet or matchmaking server problem, try again soon', ptErrOld: "This browser can't play with a friend", ptFull: 'The room is full',
         ptCopied: 'Link copied!', ptShareText: 'Come play Limonat with me! Room code:',
-        ptFell: 'You fell!', ptWatching: 'Watching {n}', ptBehind: 'behind you', ptAhead: 'ahead', ptStillRun: 'You fell… will they beat you?', ptCanSave: 'Your friend can bring you back!', ptSaveHow: 'They need {n} lemons within {s} seconds',
+        ptFell: 'You fell!', ptWatching: 'Watching {n}', vMicOn: 'Mic on', vMicOff: 'Mic off', vSpkOn: 'Friend’s voice', vSpkOff: 'Friend muted', vDenied: 'Allow the microphone in your browser settings', vNoMic: 'Could not start the microphone on this device', ptBehind: 'behind you', ptAhead: 'ahead', ptStillRun: 'You fell… will they beat you?', ptCanSave: 'Your friend can bring you back!', ptSaveHow: 'They need {n} lemons within {s} seconds',
         ptNoSave: "They didn't make it… wait for the end of the round", ptFriendFell: 'Your friend fell!', ptSaveHim: 'Grab {n} 🍋 in {s}s to bring them back', ptSaved: 'You saved your friend! 💪', ptSavedMe: 'Your friend saved you! 💪', ptTooLate: 'Too late to save them 😢', ptBack: 'Your friend is back in the run',
         ptWin: 'You win! 🏆', ptLose: 'Your friend won this time', ptTie: "It's a tie!", ptTeam: 'Team score', ptTeamS: 'Team', ptAgain: 'Play again', ptReward: 'Reward', ptFrReady: 'Your friend is ready for another round',
       });
@@ -192,6 +266,7 @@
             <div class="seg pt-mode" id="ptMode"><button data-m="race" data-i18n="ptRace"></button><button data-m="coop" data-i18n="ptCoop"></button></div>
             <div class="pt-desc" id="ptDesc"></div>
             <div class="pt-players"><div class="pt-p" id="ptMe"></div><div class="pt-vs">⚡</div><div class="pt-p" id="ptFr"></div></div>
+            <div class="pt-voice"><button class="btn small pt-micbtn"></button><button class="btn small pt-spkbtn"></button></div>
             <button class="btn primary" id="ptReady"><svg><use href="#i-check"/></svg><span data-i18n="ptReady"></span></button>
           </div>
           <div class="pt-status" id="ptStatus"></div>
@@ -201,12 +276,14 @@
       add(`<section id="partyWait" class="screen pt-spec" hidden>
           <div class="pt-spec-top glass"><span class="pt-spec-ic" id="pwIcon">👀</span><div class="pt-spec-tx"><b id="pwTitle"></b><small id="pwText"></small></div></div>
           <div class="pt-spec-bot"><div class="pt-res pt-res-mini" id="pwRows"></div>
+            <div class="pt-voice"><button class="btn small pt-micbtn"></button><button class="btn small pt-spkbtn"></button></div>
             <button class="btn small" id="pwLeave"><svg><use href="#i-home"/></svg><span data-i18n="ptLeave"></span></button></div>
         </section>`);
       add(`<section id="partyOver" class="screen dim" hidden><div class="card glass rise pt-card">
           <div class="pt-big" id="poIcon">🏆</div><h2 id="poTitle"></h2><div class="pt-status" id="poText"></div>
           <div class="pt-res" id="poRows"></div>
           <button class="btn primary" id="poAgain"><svg><use href="#i-retry"/></svg><span data-i18n="ptAgain"></span></button>
+          <div class="pt-voice"><button class="btn small pt-micbtn"></button><button class="btn small pt-spkbtn"></button></div>
           <button class="btn" id="poMenu"><svg><use href="#i-home"/></svg><span data-i18n="menu"></span></button>
         </div></section>`);
       // HUD: friend chip + emoji reactions
@@ -214,7 +291,7 @@
       this.hudEl = add(`<div id="ptHud" hidden><div class="pt-chip glass" id="ptChip"></div></div>`, hud);
       this.arrowEl = add(`<div id="ptArrow" class="glass" hidden></div>`, hud);
       const side = hud.querySelector('.hud-side');
-      this.emoEl = add(`<div class="pt-emo" id="ptEmo" hidden><div class="pt-emo-row" id="ptEmoRow" hidden>${EMO.map(e => `<button data-e="${e}">${e}</button>`).join('')}</div><button class="btn icon pt-emo-btn" id="ptEmoBtn" aria-label="Emoji">😀</button></div>`, side);
+      this.emoEl = add(`<div class="pt-emo" id="ptEmo" hidden><div class="pt-emo-row" id="ptEmoRow" hidden>${EMO.map(e => `<button data-e="${e}">${e}</button>`).join('')}</div><button class="btn icon pt-emo-btn" id="ptEmoBtn" aria-label="Emoji">😀</button><button class="btn icon pt-micbtn pt-mic-hud" aria-label="Mic"></button></div>`, side);
       // menu button
       const modes = document.querySelector('#menu .menu-modes');
       add(`<button class="btn mode" id="partyBtn"><svg><use href="#i-users"/></svg><span data-i18n="party"></span></button>`, modes);
@@ -263,10 +340,17 @@
         .pt-spec-ic{font-size:26px;line-height:1}.pt-spec-tx{display:flex;flex-direction:column;line-height:1.2}.pt-spec-tx b{font-size:16px}.pt-spec-tx small{font-size:13px;color:var(--muted);font-weight:700}
         .pt-spec-bot{display:flex;flex-direction:column;align-items:center;gap:8px;width:min(94vw,420px);pointer-events:auto}
         .pt-res-mini{width:100%}.pt-res-mini div{padding:6px 12px;background:rgba(16,20,34,.72)}
+        .pt-voice{display:flex;gap:8px;justify-content:center;width:100%}.pt-voice .btn{flex:1;font-size:15px;min-height:42px;padding:8px 10px}
+        .pt-micbtn.on{background:linear-gradient(180deg,#58d27a,#2f9e52);color:#fff}.pt-spkbtn.off{opacity:.65}
+        .pt-mic-hud{font-size:20px}.pt-emo{flex-direction:row-reverse}
         @media (max-width:520px){#ptHud{top:calc(96px + var(--safe-t));max-width:70vw}}`;
       document.head.appendChild(st);
 
       UI.bind('partyBtn', () => this.open());
+      document.querySelectorAll('.pt-micbtn').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); VR.Audio.play('click'); this.toggleMic(); }));
+      document.querySelectorAll('.pt-spkbtn').forEach(b => b.addEventListener('click', (e) => { e.stopPropagation(); VR.Audio.play('click'); this.voice.setSpeaker(!this.voice.speaker); }));
+      window.addEventListener('pointerdown', () => this.voice.kick(), true);
+      this.renderVoice();
       UI.bind('ptHost', () => this.host());
       UI.bind('ptJoin', () => this.join(document.getElementById('ptCode').value));
       document.getElementById('ptCode').addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); this.join(e.target.value); } });
@@ -288,10 +372,30 @@
       }));
     }
 
+    renderVoice() {
+      const on = this.voice.micOn, spk = this.voice.speaker, linked = this.linked;
+      document.querySelectorAll('.pt-micbtn').forEach(b => {
+        b.classList.toggle('on', on); b.disabled = !linked;
+        b.textContent = b.classList.contains('pt-mic-hud') ? (on ? '🎤' : '🔇') : (on ? '🎤 ' + UI.t('vMicOn') : '🔇 ' + UI.t('vMicOff'));
+      });
+      document.querySelectorAll('.pt-spkbtn').forEach(b => {
+        b.classList.toggle('off', !spk); b.disabled = !linked;
+        b.textContent = (spk ? '🔊 ' : '🔈 ') + UI.t(spk ? 'vSpkOn' : 'vSpkOff');
+      });
+    }
+    async toggleMic() {
+      if (!this.linked) return;
+      try { await this.voice.setMic(!this.voice.micOn); VR.Audio.unlock(); }
+      catch (e) {
+        VR.Audio.play('denied');
+        UI.toast(UI.t(e && e.name === 'NotAllowedError' ? 'vDenied' : 'vNoMic'), 2600);
+      }
+    }
     open() {
       this.g.setState('party'); UI.setLang(UI.lang);
       document.getElementById('ptName').value = UI.store.get('playerName', '');
       document.getElementById('ptCode').placeholder = UI.t('ptCodePh');
+      this.renderVoice();
       this.status('');
       this.render();
     }
@@ -307,15 +411,15 @@
       seg.toggleAttribute('data-guest', this.role !== 'host');
       seg.querySelectorAll('button').forEach(b => b.setAttribute('aria-pressed', b.dataset.m === this.mode ? 'true' : 'false'));
       document.getElementById('ptDesc').textContent = UI.t(this.mode === 'race' ? 'ptRaceDesc' : 'ptCoopDesc');
-      const card = (el, name, ready, extra, empty) => {
+      const card = (el, name, ready, extra, empty, mic) => {
         el.className = 'pt-p' + (ready ? ' ok' : '') + (empty ? ' empty' : '');
         el.innerHTML = empty ? `<span class="av">⏳</span><small>${UI.t('ptWaiting')}</small>`
-          : `<span class="av">🏃</span><b></b><small>${UI.t(ready ? 'ptReady' : 'ptNotReady')}${extra}</small>`;
+          : `<span class="av">${mic ? '🎙️' : '🏃'}</span><b></b><small>${UI.t(ready ? 'ptReady' : 'ptNotReady')}${extra}</small>`;
         const b = el.querySelector('b'); if (b) b.textContent = name;
       };
-      card(document.getElementById('ptMe'), this.myName + ' (' + UI.t('ptYou') + ')', this.meReady, '');
+      card(document.getElementById('ptMe'), this.myName + ' (' + UI.t('ptYou') + ')', this.meReady, '', false, this.voice.micOn);
       const f = this.linked ? this.fr : null;
-      card(document.getElementById('ptFr'), f ? this.frName : '', f && f.ready, f && this.rtt ? ` · ${Math.round(this.rtt)}ms` : '', !f);
+      card(document.getElementById('ptFr'), f ? this.frName : '', f && f.ready, f && this.rtt ? ` · ${Math.round(this.rtt)}ms` : '', !f, this.frMic);
       const rb = document.getElementById('ptReady');
       rb.disabled = !f;
       rb.classList.toggle('green', this.meReady);
@@ -384,10 +488,13 @@
       clearInterval(this.pingT);
       this.pingT = setInterval(() => this.send({ t: 'ping', k: performance.now() }), 2000);
       this.send({ t: 'ping', k: performance.now() });
+      this.frMic = false; this.voice.start(this.role === 'host');     // the host offers the audio line
+      this.renderVoice();
       if (this.g.state === 'party') this.render();
     }
     onClose() {
       clearInterval(this.pingT);
+      this.voice.stop(); this.frMic = false; this.renderVoice();
       const wasFriend = this.fr && this.fr.name;
       this.fr = null; this.meReady = false;
       if (this.inRun) {
@@ -405,7 +512,7 @@
       } else if (this.g.state === 'party') { this.render(); if (wasFriend) this.status(UI.t('ptLeft'), true); }
     }
     send(m) { if (this.net) this.net.send(m); }
-    close() { clearInterval(this.pingT); if (this.net) { this.send({ t: 'bye' }); this.net.close(); } this.net = null; this.fr = null; this.rtt = 0; }
+    close() { clearInterval(this.pingT); this.voice.stop(); this.frMic = false; this.renderVoice(); if (this.net) { this.send({ t: 'bye' }); this.net.close(); } this.net = null; this.fr = null; this.rtt = 0; }
     leave() {
       this.close(); this.role = null; this.code = ''; this.meReady = false;
       const inGame = this.inRun || this.g.state === 'partyWait' || this.g.state === 'partyOver';
@@ -494,6 +601,12 @@
         case 'alive':
           this.fDead = false; this.buf = []; this.dS = null;
           UI.toast(UI.t('ptBack'), 1300, true);
+          break;
+        case 'rtc': this.voice.signal(m); break;
+        case 'mic':
+          this.frMic = !!m.on; this.renderVoice();
+          if (g.state === 'party') this.render();
+          if (this.frMic) UI.toast(`🎤 ${this.frName}`, 900);
           break;
         case 'bye':
           if (this.net) { if (this.role === 'host') this.net.dropConn(); else this.net.close(); }
