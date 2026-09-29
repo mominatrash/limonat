@@ -38,7 +38,7 @@
 
   // perk: text shown in the shop. perkMul = power-up duration multipliers,
   // lemonNeed = lemons for a Lemonade, coinBonus = extra share of coins.
-  // acc = accessories: glasses | shades | headphones | crown | leaf | visor
+  // acc = accessories: glasses | shades | headphones | crown | leaf | visor | tulips | hat | fez
   VR.CHARACTERS = [
     { id: 'hero', name: 'البطل', nameEn: 'Hero', tagline: 'الشخصية الأصلية', taglineEn: 'The original runner', price: 0, palette: HERO,
       perk: { ar: 'بطاقة البداية: درع أطول ‎+20%', en: 'Starter perk: shield +20%' }, perkMul: { shield: 1.2 } },
@@ -60,6 +60,9 @@
     { id: 'sunset', name: 'غروب', nameEn: 'Sunset', tagline: 'بلون آخر النهار', taglineEn: 'Colours of dusk', price: 4000,
       palette: Object.assign({}, HERO, { shirt: 0xff7a45, shorts: 0x5a2d82, cap: 0xffd23f, shoe: 0xffd23f, sole: 0x5a2d82, detail: 0xd9542a, acc1: 0x5a2d82 }),
       scarf: [0xffd23f, 0xff7a45], acc: ['glasses'], perk: { ar: 'الانطلاق والعملات المضاعفة ‎+50%', en: 'Boost & 2x Coins last +50%' }, perkMul: { boost: 1.5, double: 1.5 } },
+    { id: 'tulip', name: 'توليب', nameEn: 'Tulip', tagline: 'من حقول الربيع', taglineEn: 'From the spring fields', price: 5000,
+      palette: Object.assign({}, HERO, { shirt: 0xffe1ec, shorts: 0x2f8a45, cap: 0x2a6b3f, hair: 0xfafaf8, shoe: 0xff7fb0, sole: 0x2f8a45, detail: 0xe86fa0 }),
+      acc: ['tulips'], perk: { ar: 'الدراجة والعربة تدوم ‎+60%', en: 'Bike & mine cart last +60%' }, perkMul: { bike: 1.6, minecart: 1.6 } },
     { id: 'astro', name: 'رائد فضاء', nameEn: 'Astro', tagline: 'وُلد ليطير', taglineEn: 'Born to fly', price: 6000,
       palette: Object.assign({}, HERO, { shirt: 0xf1f3f7, shorts: 0x3d6fd9, cap: 0x3d6fd9, hair: 0xfafaf8, shoe: 0xff7a2f, sole: 0x3d6fd9, detail: 0x8fa3c7, acc1: 0x6fd8ff }),
       acc: ['visor', 'headphones'], perk: { ar: 'الجيت باك يدوم ‎+50%', en: 'Jetpack lasts +50%' }, perkMul: { jetpack: 1.5 } },
@@ -246,6 +249,25 @@
         mb.cyl('toon', 0xc0282d, 0, y0 + 0.08, 0.02, R * 0.62, R * 0.78, 0.2, { seg: 22 });
         mb.cyl('ink', 0x1b1b1d, 0, y0 + 0.19, 0.02, 0.012, 0.012, 0.02, { seg: 6 });
         mb.sphere('toon', 0x1b1b1d, 0.1, y0 + 0.08, -0.02, 0.025, { sy: 2.2, seg: 8 });   // tassel
+      }
+      if (a === 'tulips') {
+        // a spring garland on the beanie rim: six tulips leaning outward (the very front stays clear for the eyes)
+        const CT = 0.15, yb = cy + 0.15, rr = R * 1.0, lean = 0.55;
+        mb.torus('toon', 0x2f8a45, 0, yb, 0.03, rr, 0.017, { rx: Math.PI / 2 + CT, sx: 1.07, seg: 36 });
+        const cols = [0xe8433a, 0xff7fb0, 0xffd23f, 0x9b5de5, 0xff7a45, 0xff4f8b];
+        [-2.45, -1.55, -0.72, 0.72, 1.55, 2.45].forEach((a0, i) => {
+          const dx = Math.sin(a0), dz = -Math.cos(a0), col = cols[i];
+          const bx = dx * rr * 1.07, bz = dz * rr * 0.99 + 0.03, by = yb - dz * rr * Math.sin(CT);
+          const o = { rz: -dx * lean, rx: dz * lean };
+          mb.cyl('toon', 0x2f8a45, bx + dx * 0.025, by + 0.045, bz + dz * 0.025, 0.007, 0.009, 0.09, Object.assign({ seg: 6 }, o));
+          const hx = bx + dx * 0.05, hy = by + 0.105, hz = bz + dz * 0.05;
+          mb.sphere('toon', col, hx, hy, hz, 0.04, Object.assign({ sx: 0.92, sy: 1.25, sz: 0.92, seg: 12 }, o));
+          for (let k = 0; k < 3; k++) {
+            const ang = k * Math.PI * 2 / 3 + i;
+            mb.cone('toon', col, hx + Math.cos(ang) * 0.021 + dx * 0.012, hy + 0.045, hz + Math.sin(ang) * 0.021 + dz * 0.012, 0.019, 0.034, Object.assign({ seg: 6 }, o));
+          }
+          mb.sphere('toon', 0x3fae4f, bx + dx * 0.03, by + 0.03, bz + dz * 0.03, 0.038, { sx: 0.3, sy: 1, sz: 0.16, rz: -dx * 0.9, rx: dz * 0.9, ry: a0, seg: 8 });
+        });
       }
       if (a === 'leaf') {
         // a little lemon leaf sprouting from the beanie

@@ -8,7 +8,7 @@
   const T = THREE, UI = VR.UI;
   const SW = [0xf4f3ef, 0x1b1b1d, 0xe8433a, 0xff7a45, 0xffd23f, 0x7bc86c, 0x2f8a45, 0x6fdcc0, 0x3ec1ff, 0x3d6fd9, 0x9b7bff, 0xe86fb3, 0x8a5a33, 0xc9b28f, 0x5a2d82, 0x262c3d];
   const PARTS = [['shirt', 'قميص', 'Shirt'], ['shorts', 'شورت', 'Shorts'], ['cap', 'طاقية', 'Beanie'], ['shoe', 'حذاء', 'Shoes'], ['hair', 'الخصلة', 'Tuft'], ['acc', 'إكسسوار', 'Extras'], ['scarf', 'شال', 'Scarf']];
-  const ACC = [[null, 'بدون', 'None'], ['glasses', 'نظارة', 'Glasses'], ['shades', 'شمسية', 'Shades'], ['visor', 'نيون', 'Goggles'], ['headphones', 'سماعات', 'Headphones'], ['leaf', 'ورقة', 'Leaf'], ['crown', 'تاج', 'Crown']];
+  const ACC = [[null, 'بدون', 'None'], ['glasses', 'نظارة', 'Glasses'], ['shades', 'شمسية', 'Shades'], ['visor', 'نيون', 'Goggles'], ['headphones', 'سماعات', 'Headphones'], ['leaf', 'ورقة', 'Leaf'], ['crown', 'تاج', 'Crown'], ['tulips', 'توليب', 'Tulips']];
   const shade = (c, f) => VR.C.shade(c, f);
   const hex = (c) => '#' + c.toString(16).padStart(6, '0');
 
