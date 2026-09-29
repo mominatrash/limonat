@@ -67,6 +67,8 @@
     return mb.geometries()[0].geometry;
   }
 
+  VR.InstancedSet = InstancedSet;
+
   // power-up icons (3D)
   const PU_BUILD = {
     magnet(mb) {
@@ -137,7 +139,8 @@
       g.translate(0, 0, -0.05);
       mb.geo('chrome', 0xffd23f, g, 0, 0, 0);
     },
-  };
+  };  VR.PU_BUILD = PU_BUILD;
+
 
   const glowMat = new T.ShaderMaterial({
     uniforms: { uColor: { value: new T.Color() } }, transparent: true, depthWrite: false, blending: T.AdditiveBlending,
@@ -200,6 +203,31 @@
     shift(dz) {
       for (const set of [this.coins, this.gems]) for (const i of set.active) set.items[i].z += dz;
       for (const p of this.powerups) { p.z += dz; p.obj.position.z = p.z; }
+    }
+    // a helper (pet) picks up coins / lemons within r metres of (x, y, z)
+    grabNear(x, y, z, r, game) {
+      const r2 = r * r;
+      for (const i of this.coins.active) {
+        const c = this.coins.items[i];
+        const dx = c.x - x, dy = c.y - y, dz = c.z - z;
+        if (dx * dx + dy * dy + dz * dz < r2) { game.onCoin(1, c.x, c.y, c.z); this.coins.kill(i); }
+      }
+      for (const i of this.gems.active) {
+        const c = this.gems.items[i];
+        const dx = c.x - x, dy = c.y - y, dz = c.z - z;
+        if (dx * dx + dy * dy + dz * dz < r2) { game.onGem(c.x, c.y, c.z); this.gems.kill(i); }
+      }
+    }
+    // remove the coin sitting at (x, y, z) (an event item takes its place)
+    removeCoinAt(x, y, z) {
+      for (const i of this.coins.active) { const c = this.coins.items[i]; if (Math.abs(c.x - x) < 0.05 && Math.abs(c.y - y) < 0.05 && Math.abs(c.z - z) < 0.05) { this.coins.kill(i); return true; } }
+      return false;
+    }
+    // number of coins in a lane between z0 (near) and z1 (far)
+    coinsInLane(x, z0, z1) {
+      let n = 0;
+      for (const i of this.coins.active) { const c = this.coins.items[i]; if (Math.abs(c.x - x) < 0.9 && c.z < z0 && c.z > z1) n++; }
+      return n;
     }
     burst(x, y, z, color) { if (this.fx) this.fx.sparkle(x, y, z, color || 0xffe28a, 12, 4); }
 
@@ -293,5 +321,5 @@
     list() { return Object.keys(this.timers).filter(k => this.timers[k] > 0); }
   }
   VR.PowerUpState = PowerUpState;
-  VR.POWERUP_COLORS = { magnet: 0xff5a4f, shield: 0x4fb8ff, boost: 0xffb347, double: 0x6ee07a, invincible: 0xffd23f, lemonade: 0xffe14a, jetpack: 0xff8a3d, sneakers: 0x9b7bff };
+  VR.POWERUP_COLORS = { magnet: 0xff5a4f, shield: 0x4fb8ff, boost: 0xffb347, double: 0x6ee07a, invincible: 0xffd23f, lemonade: 0xffe14a, jetpack: 0xff8a3d, sneakers: 0x9b7bff, minecart: 0xc0703a, bike: 0x3ec1ff };
 })();

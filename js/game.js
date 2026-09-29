@@ -46,7 +46,13 @@
       this.player = new VR.Player(this.scene);
       this.player.setCharacter(VR.CHARACTERS[this.charIndex]);
       this.player.events.onStep = (side, x, y, z) => this.onStep(side, x, y, z);
+      // feature systems (weather, thief, vehicles, pets, stand, story, daily ...)
+      this.sys = (VR.SYSTEMS || []).map(S => new S(this));
+      this.S = {}; for (const s of this.sys) if (s.name) this.S[s.name] = s;
+      this.mode = 'endless'; this.evRnd = Math.random;
       this.bindUI();
+      for (const s of this.sys) if (s.bind) s.bind();
+      UI.setLang(UI.lang);          // modules added strings + screens: translate them too
       this.applySettings();
 
       this.clock = new T.Clock();
@@ -55,7 +61,7 @@
       this.menuTime = 0; this.timeScale = 1;
       this.fxRadial = 0; this.fxCA = 0; this.fxFlash = 0; this.fxDesat = 0;
       this.look = null; this.envTimer = 0; this.envDirty = 3;
-      this._v = new T.Vector3();
+      this._v = new T.Vector3(); this._v2 = new T.Vector3();
     }
 
     // ------------------------------------------------------------ setup
@@ -99,6 +105,11 @@
     }
 
     get Q() { return QUALITY[this.settings.quality]; }
+
+    // broadcast an event to every feature system that implements it
+    emit(ev, a, b, c) { if (!this.sys) return; for (const s of this.sys) if (s[ev]) s[ev](a, b, c); }
+    // first system that answers wins (e.g. a vehicle absorbing a crash)
+    ask(ev, a, b) { if (!this.sys) return false; for (const s of this.sys) if (s[ev] && s[ev](a, b)) return true; return false; }
 
     // shifts the picture on screen without moving the camera (menu framing)
     applyViewOffset() {
@@ -157,7 +168,7 @@
 
     bindUI() {
       const $ = (id) => document.getElementById(id);
-      UI.bind('playBtn', () => this.start());
+      UI.bind('playBtn', () => this.start({ mode: 'endless' }));
       // full screen (hides the phone's browser bars); not every phone browser supports it
       const fsOK = document.fullscreenEnabled || document.webkitFullscreenEnabled;
       const fsBtn = $('fsBtn');
@@ -165,8 +176,13 @@
       const fsIcon = () => { fsBtn.querySelector('use').setAttribute('href', (document.fullscreenElement || document.webkitFullscreenElement) ? '#i-shrink' : '#i-expand'); };
       document.addEventListener('fullscreenchange', fsIcon); document.addEventListener('webkitfullscreenchange', fsIcon);
       UI.bind('fsBtn', () => { if (document.fullscreenElement || document.webkitFullscreenElement) (document.exitFullscreen || document.webkitExitFullscreen).call(document); else this.enterFullscreen(); });
-      UI.bind('againBtn', () => this.start());
+      UI.bind('againBtn', () => this.start(this.lastRunOpts || { mode: 'endless' }));
       UI.bind('missionsBtn', () => { UI.missions(this.missions); this.setState('missions'); });
+      UI.bind('dailyBtn', () => this.S.daily.open());
+      UI.bind('storyBtn', () => this.S.story.open());
+      UI.bind('petsBtn', () => this.S.pets.open());
+      UI.bind('standBtn', () => this.S.stand.open());
+      UI.bind('boardBtn', () => this.S.board.open());
       UI.bind('missionsDone', () => this.setState('menu'));
       UI.bind('charBtn', () => { this.charIndex = VR.CHARACTERS.findIndex(c => c.id === this.selectedId); this.setState('character'); });
       UI.bind('charPrev', () => this.cycleChar(-1));
@@ -203,7 +219,7 @@
       // menu: Enter / Space starts a run
       window.addEventListener('keydown', (e) => {
         if (e.target && e.target.tagName === 'INPUT') return;
-        if ((e.code === 'Enter' || e.code === 'Space') && this.state === 'menu') { e.preventDefault(); VR.Audio.unlock(); this.start(); }
+        if ((e.code === 'Enter' || e.code === 'Space') && this.state === 'menu') { e.preventDefault(); VR.Audio.unlock(); this.start({ mode: 'endless' }); }
         if (this.state === 'character') { if (e.code === 'ArrowLeft') this.cycleChar(UI.lang === 'ar' ? 1 : -1); if (e.code === 'ArrowRight') this.cycleChar(UI.lang === 'ar' ? -1 : 1); }
       });
       // drag to spin the character on the character screen
@@ -239,9 +255,14 @@
     refreshShop() { UI.character(VR.CHARACTERS[this.charIndex], this.charIndex, this.owned, this.selectedId, this.bank); }
     shopAction() {
       const def = VR.CHARACTERS[this.charIndex];
-      if (!this.owned.has(def.id)) {
+      if (!this.owned.has(def.id) && def.event) {
+        const E = this.S.events;
+        if (!E || E.count(def.event) < def.need) { VR.Audio.play('denied'); UI.toast(UI.t('eventOnly'), 1400); return; }
+      } else if (!this.owned.has(def.id)) {
         if (this.bank < def.price) { VR.Audio.play('denied'); UI.toast(UI.t('notEnough'), 1200); return; }
         this.bank -= def.price; UI.store.set('bank', this.bank);
+      }
+      if (!this.owned.has(def.id)) {
         this.owned.add(def.id); UI.store.set('owned', [...this.owned]);
         this.selectedId = def.id; UI.store.set('character', def.id);
         VR.Audio.play('buy');
@@ -264,13 +285,14 @@
     // ------------------------------------------------------------ states
     setState(s) {
       this.state = s;
-      const map = { menu: 'menu', character: 'character', settings: 'settings', paused: 'pause', gameover: 'gameover', playing: null, dying: null, loading: 'loading', missions: 'missions', resuming: null };
+      const map = { menu: 'menu', character: 'character', settings: 'settings', paused: 'pause', gameover: 'gameover', playing: null, dying: null, loading: 'loading', missions: 'missions', resuming: null, ...(VR.SCREEN_MAP || {}) };
       UI.show(map[s]);
       UI.hud(s === 'playing' || s === 'paused' || s === 'dying' || s === 'resuming');
       VR.Input.setEnabled(s === 'playing');
       if (s !== 'playing') UI.tutorial(null);
       if (s === 'menu') { UI.menuStats(this.best, this.bank); VR.Audio.setMode('menu'); }
       if (s === 'character') this.refreshShop();
+      this.emit('state', s);
     }
 
     boot() {
@@ -302,10 +324,12 @@
       this.deathState = null;
       this.player.reset();
       this.powerups.reset();
-      this.world.reset();
+      this.world.reset(this.runOpts || {});
+      this.emit('reset');
       this.fx.clear();
       this.distance = 0; this.score = 0; this.coins = 0;
       this.lemons = 0; this.lemonsRun = 0;           // lemon meter (resets each run)
+      this.stumbles = 0; this.revived = false; this.diffFn = null;
       this.jetGrace = 0; VR.Audio.jet(false);
       this.multiplier = 1;
       this.speed = C.SPEED_START;
@@ -328,8 +352,16 @@
       try { const r = req.call(el, { navigationUI: 'hide' }); if (r && r.catch) r.catch(() => {}); } catch (e) { /* not allowed */ }
     }
 
-    start() {
+    /**
+     * opts.mode  'endless' (default) | 'daily' | 'story'
+     * opts.seed  seeded railway; opts.biomes / styles / forks -> world.reset
+     */
+    start(opts = {}) {
+      if (opts instanceof Event) opts = {};
       VR.Audio.unlock();
+      this.mode = opts.mode || 'endless';
+      this.runOpts = opts;
+      this.evRnd = opts.seed != null ? VR.rng(opts.seed * 7 + 13) : Math.random;
       // on phones, go full screen when a run starts (tap = user gesture)
       if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) this.enterFullscreen();
       // the menu may have been showing a character you haven't bought
@@ -355,6 +387,7 @@
       UI.lemons(0, this.lemonNeed, 0);
       this.missions.startRun();
       this.lifeAcc = { dist: 0, coins: 0 };
+      this.emit('runStart', opts);
     }
     pause() {
       if (this.state === 'resuming') { clearTimeout(this.cdTimer); UI.countdown(0); this.setState('paused'); return; }
@@ -373,6 +406,8 @@
       tick();
     }
     toMenu() {
+      this.runOpts = {}; this.mode = 'endless';
+      this.emit('leaveRun');
       this.resetRun();
       this.world.update(0, this.player, C.SPEED_START, 0, this, true);
       this.setState('menu');
@@ -401,6 +436,8 @@
       this.missions.endRun({ dist: this.distance - acc.dist, coins: this.coins - acc.coins });
       acc.dist = this.distance; acc.coins = this.coins;
       UI.missions(this.missions, 'goMissions');
+      this.lastRunOpts = this.runOpts;
+      this.emit('runEnd', { score: this.score, dist: this.distance, coins: this.coins, isBest });
       clearTimeout(this.goTimer);
       this.goTimer = setTimeout(() => {
         UI.gameOver({ score: this.score, dist: this.distance, coins: this.coins, best: this.best, isBest });
@@ -427,6 +464,7 @@
 
     revive() {
       const d = this.deathState;
+      this.revived = true;
       this.bank -= d.coinsBanked; UI.store.set('bank', this.bank);
       this.player.revive(d);
       this.powerups.timers.invincible = Math.max(this.powerups.remaining('invincible'), 3);
@@ -443,7 +481,7 @@
 
     // ------------------------------------------------------------ rules
     speedAt(d) { return C.SPEED_START + (C.SPEED_MAX - C.SPEED_START) * (1 - Math.exp(-d / C.SPEED_RAMP)); }
-    difficultyAt(d) { return 1 - Math.exp(-d / C.DIFFICULTY_RAMP); }
+    difficultyAt(d) { return this.diffFn ? this.diffFn(d) : 1 - Math.exp(-d / C.DIFFICULTY_RAMP); }
     multiplierAt(d) { let m = 0; for (const s of C.MULTIPLIER_STEPS) if (d >= s) m++; return m; }
 
     updateScore(dm) {
@@ -514,13 +552,13 @@
       }
       if (this.jetGrace > 0) this.jetGrace -= dt;
     }
-    warmExtras(on) { this.player.jetpack.visible = on; }
+    warmExtras(on) { this.player.jetpack.visible = on; this.emit('warm', on); }
     vibrate(ms) { try { if (navigator.vibrate && this.settings.sfx) navigator.vibrate(ms); } catch (e) { /* not supported */ } }
 
     // lemon: fills the lemon meter; a full meter = LEMONADE rush
     onGem(x, y, z) {
       const L = C.LEMONADE, pu = this.powerups;
-      this.lemonsRun++; this.missions.bump('lemons');
+      this.lemonsRun++; this.missions.bump('lemons'); this.emit('lemon');
       this.score += C.GEM_POINTS * this.multiplier;
       this.fx.sparkle(x, y, z, 0xfff07a, 18, 4.5, -this.speed * 0.9);
       VR.Audio.play('gem');
@@ -549,7 +587,8 @@
     onPowerUp(type, x, y, z) {
       this.powerups.activate(type);
       this.missions.bump('powerups');
-      if (type === 'jetpack') this.startJetpack();
+      if (type === 'jetpack') { if (this.S.vehicles) this.S.vehicles.dismount('quiet'); this.startJetpack(); }
+      this.emit('powerUp', type);
       if (type === 'sneakers') { VR.Audio.play('boing'); this.vibrate(20); }
       this.score += C.POWERUP_POINTS * this.multiplier;
       this.fx.sparkle(x, y, z, VR.POWERUP_COLORS[type], 24, 6, -this.speed * 0.9);
@@ -601,9 +640,11 @@
         const now = this.elapsed;
         if (now - this.player.lastStumble < C.STUMBLE_WINDOW) {
           if (pu.active('shield')) { pu.consume('shield'); this.shieldHit(o); return; }
+          if (this.ask('absorbCrash', o)) return;
           this.gameOver(); return;
         }
         this.player.lastStumble = now;
+        this.stumbles++;
         this.player.bounceBack();
         this.hitCooldown = 0.35;
         this.shake = 0.2; this.fxCA = 0.6;
@@ -613,6 +654,7 @@
         return;
       }
       if (pu.active('shield')) { pu.consume('shield'); this.shieldHit(o); return; }
+      if (this.ask('absorbCrash', o)) return;
       this.gameOver();
     }
     shieldHit(o) {
@@ -633,11 +675,12 @@
 
       if (this.state === 'playing') this.updatePlaying(dt);
       else if (this.state === 'dying' || this.state === 'gameover') this.updateDeath(dt, rawDt);
-      else if (this.state === 'menu' || this.state === 'character' || this.state === 'loading' || this.state === 'missions') this.updateMenu(rawDt);
+      else if (this.state === 'levelDone') this.emit('finishUpdate', rawDt);
+      else if (this.state === 'menu' || this.state === 'character' || this.state === 'loading' || this.state === 'missions' || (VR.MENU_STATES || []).includes(this.state)) this.updateMenu(rawDt);
       else if (this.state === 'settings' && this.settingsReturn !== 'paused') this.updateMenu(rawDt);
       else if (this.state === 'paused' || this.state === 'settings') { /* frozen frame */ }
 
-      if (this.state !== 'paused' && this.state !== 'resuming' && !(this.state === 'settings' && this.settingsReturn === 'paused')) {
+      if (this.state !== 'paused' && this.state !== 'resuming' && this.state !== 'dialog' && !(this.state === 'settings' && this.settingsReturn === 'paused')) {
         this.fx.update(dt);
         this.fx.ambient(dt, this.camera, this.speed);
       }
@@ -668,7 +711,7 @@
       const boosting = this.state === 'playing' && this.powerups.active('boost');
       this.fxRadial += ((boosting ? 1 : 0) - this.fxRadial) * Math.min(1, dt * 4);
       if (L) {
-        cu.uExposure.value += (L.exposure * (1 + this.tunnelDark * 0.35) - cu.uExposure.value) * Math.min(1, dt * 2);
+        cu.uExposure.value += (L.exposure * (1 + this.tunnelDark * 0.35) * (this.envExposureMul || 1) - cu.uExposure.value) * Math.min(1, dt * 2);
         cu.uBloom.value += (L.bloom + this.tunnelDark * 0.3 - cu.uBloom.value) * Math.min(1, dt * 2);
         cu.uSat.value += (L.sat - cu.uSat.value) * Math.min(1, dt * 2);
         cu.uTint.value.lerp(L.tint, Math.min(1, dt * 2));
@@ -723,6 +766,9 @@
       this.resolveCollisions();
       if (this.state !== 'playing') return;
       this.collect.update(dt, p, this);
+      this.updateFork();
+      this.emit('update', dt);
+      if (this.state !== 'playing') return;
 
       p.shieldMesh.visible = this.powerups.active('shield');
       p.aura.visible = this.powerups.active('invincible');
@@ -737,6 +783,7 @@
         p.z += dz; this.world.shift(dz); this.fx.shift(dz); this.camera.position.z += dz; this.camLook.z += dz;
         p.object.position.z = p.z;
         if (p.rig.scarf) p.rig.scarf.reset();
+        this.emit('shift', dz);
       }
 
       this.updateEnvironment(dt);
@@ -749,6 +796,23 @@
       this.missions.runValue('distRun', this.distance);
       this.missions.runValue('coinsRun', this.coins);
       this.missions.runValue('scoreRun', this.score);
+    }
+
+    // junction: warn on approach, apply the choice when the gate is passed
+    updateFork() {
+      const f = this.world.fork, p = this.player;
+      if (!f || f.decided) return;
+      if (!f.warned && p.z - f.z < this.speed * 3.2) {
+        f.warned = true; VR.Audio.play('tick');
+        UI.toast(UI.t('forkAhead'), 1800, true);
+      }
+      const o = this.world.checkFork(p);
+      if (o) {
+        const B = VR.BIOMES[o.biome];
+        const perk = o.route.rich ? UI.t('routeRich') : UI.t('routeEasy');
+        UI.toast((UI.lang === 'ar' ? B.name : B.nameEn) + ' · ' + perk, 1800, true);
+        VR.Audio.play('whoosh'); this.missions.bump('forks');
+      }
     }
 
     // coins etc. are hidden behind the menu so they don't float in front of the camera
@@ -811,7 +875,7 @@
       if (!chunk) return;
       const biome = VR.BIOMES[chunk.biome];
       if (chunk.biome !== this.lastBiome) {
-        if (this.lastBiome && this.state === 'playing') UI.biome(biome);
+        if (this.lastBiome && this.state === 'playing') { UI.biome(biome); if (this.S.weather) this.S.weather.biomeChanged(chunk.biome); }
         this.lastBiome = chunk.biome;
         this.fx.setAmbient(biome.particles);
         this.envTimer = 0; this.envDirty = 1;
@@ -835,7 +899,7 @@
       c.fogNear += (L.fogNear - c.fogNear) * k; c.fogFar += (L.fogFar - c.fogFar) * k;
       c.night += (L.night - c.night) * k;
 
-      this.sky.update(dt, this.camera, L, k);
+      this.sky.update(dt, this.camera, this.state === 'playing' && this.S.weather ? this.S.weather.skyLook(L) : L, k);
       const dark = this.tunnelDark;
       this.scene.fog.color.copy(c.fog).lerp(TUNNEL_COLOR, dark * 0.92);
       const fq = this.Q.fog;
@@ -845,6 +909,8 @@
       this.hemi.intensity = c.hemi * (1 - dark * 0.8);
       this.sun.color.copy(c.sunColor);
       this.sun.intensity = c.sunI * (1 - dark * 0.9);
+      if (this.state === 'playing' && this.S.weather) this.S.weather.applyEnv(this.scene.fog, this.hemi, this.sun);
+      else this.envExposureMul = 1;
       for (const m of VR.nightMaterials) m.emissiveIntensity = c.night * 1.1;
       this.collect.coinMat.emissiveIntensity = 0.8 + c.night * 1.4 + dark * 1.0;
       // the hero stays white everywhere; it only settles a hair in tunnels / at night
@@ -966,6 +1032,7 @@
     // menu: character faces the camera, idles and waves; the camera drifts
     updateMenu(dt) {
       this.menuTime += dt;
+      this.emit('menuUpdate', dt);
       const p = this.player;
       p.object.position.set(0, 0, 0);
       p.x = p.y = p.z = 0;
@@ -987,11 +1054,13 @@
       // `frac` = how much of the screen height the hero fills, `sx/sy` = where
       // his middle goes (-1..1). The camera aims straight at him and the
       // picture is then slid into place with a view offset.
-      const fr = this.menuFrame();
+      let fr = this.menuFrame();
+      // a feature screen can aim the camera elsewhere (e.g. the lemonade stand)
+      for (const s of this.sys) if (s.menuCam) { const o = s.menuCam(this.state, a); if (o) { fr = Object.assign({}, fr, o); break; } }
       const vf = T.MathUtils.degToRad(this.baseFov);
-      const d = 1.9 / (fr.frac * 2 * Math.tan(vf / 2));
-      const dir = this._v.set(0.34 + Math.sin(a) * 0.16, 0.2, -1).normalize();
-      const look = (this._mLook || (this._mLook = new T.Vector3())).set(0, 0.95, 0);
+      const d = (fr.h || 1.9) / (fr.frac * 2 * Math.tan(vf / 2));
+      const dir = this._v.copy(fr.dir || this._v.set(0.34 + Math.sin(a) * 0.16, 0.2, -1)).normalize();
+      const look = (this._mLook || (this._mLook = new T.Vector3())).copy(fr.look || this._v2.set(0, 0.95, 0));
       const target = (this._mTarget || (this._mTarget = new T.Vector3())).copy(look).addScaledVector(dir, d);
       if (!this.menuCamPos) { this.menuCamPos = target.clone(); this.menuLook = look.clone(); }
       this.menuCamPos.lerp(target, 1 - Math.exp(-dt * 3));

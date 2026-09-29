@@ -63,6 +63,16 @@
     { id: 'astro', name: 'رائد فضاء', nameEn: 'Astro', tagline: 'وُلد ليطير', taglineEn: 'Born to fly', price: 6000,
       palette: Object.assign({}, HERO, { shirt: 0xf1f3f7, shorts: 0x3d6fd9, cap: 0x3d6fd9, hair: 0xfafaf8, shoe: 0xff7a2f, sole: 0x3d6fd9, detail: 0x8fa3c7, acc1: 0x6fd8ff }),
       acc: ['visor', 'headphones'], perk: { ar: 'الجيت باك يدوم ‎+50%', en: 'Jetpack lasts +50%' }, perkMul: { jetpack: 1.5 } },
+    // seasonal event characters: unlocked with the event's collectible (see events.js)
+    { id: 'farmer', name: 'الفلّاح', nameEn: 'The Farmer', tagline: 'من موسم قطف الزيتون', taglineEn: 'From the olive harvest', price: 0, event: 'olive', need: 150,
+      palette: Object.assign({}, HERO, { shirt: 0x7b8c3c, shorts: 0x6b4a32, cap: 0x3a2f24, shoe: 0x6b4a32, sole: 0x3a2f24, detail: 0x55632a, acc1: 0x6b3a2a }),
+      acc: ['hat'], scarf: [0xf4f3ef, 0x55632a], perk: { ar: 'زيتون أكثر بالمواسم ‎+50%', en: '+50% event items' }, eventBonus: 1.5 },
+    { id: 'misaharati', name: 'المسحراتي', nameEn: 'Misaharati', tagline: 'من ليالي رمضان', taglineEn: 'From Ramadan nights', price: 0, event: 'ramadan', need: 150,
+      palette: Object.assign({}, HERO, { shirt: 0x1f4f8a, shorts: 0xf4f3ef, cap: 0xc0282d, shoe: 0x8a5a33, sole: 0x3a2f24, detail: 0xd6b35a }),
+      acc: ['fez'], scarf: [0xd6b35a, 0x8a6a2a], perk: { ar: 'فوانيس أكثر بالمواسم ‎+50%', en: '+50% event items' }, eventBonus: 1.5 },
+    { id: 'snowy', name: 'ثلجي', nameEn: 'Snowy', tagline: 'من الشتوية', taglineEn: 'From the winter festival', price: 0, event: 'winter', need: 150,
+      palette: Object.assign({}, HERO, { shirt: 0xe8433a, shorts: 0xf4f3ef, cap: 0xf4f3ef, shoe: 0xe8433a, sole: 0xf4f3ef, detail: 0xb3261e, acc1: 0xf4f3ef, acc2: 0xe8433a }),
+      acc: ['headphones'], scarf: [0x2f8a45, 0xf4f3ef], perk: { ar: 'ندف ثلج أكثر ‎+50%', en: '+50% event items' }, eventBonus: 1.5 },
     { id: 'gold', name: 'الليمونة الذهبية', nameEn: 'Golden Lemon', tagline: 'لأبطال المسافات', taglineEn: 'For distance legends', price: 8000,
       palette: Object.assign({}, HERO, { shirt: 0xffc93c, shorts: 0x1b1b1d, cap: 0xffc93c, hair: 0xfff3b0, shoe: 0x1b1b1d, sole: 0xffc93c, detail: 0xd99a12, acc1: 0xffc93c }),
       scarf: [0x1b1b1d, 0xffc93c], acc: ['crown'], perk: { ar: 'عملات إضافية ‎+25%', en: '+25% coins' }, coinBonus: 0.25 },
@@ -223,6 +233,19 @@
           mb.cone('toon', A1, Math.sin(ang) * 0.115, y0 + 0.07, 0.03 + Math.cos(ang) * 0.115, 0.03, 0.09, { seg: 6 });
           mb.sphere('ink', i % 2 ? 0xff5a4f : 0x5ad1ff, Math.sin(ang) * 0.128, y0, 0.03 + Math.cos(ang) * 0.128, 0.017, { seg: 8 });
         }
+      }
+      if (a === 'hat') {
+        // wide straw hat for the harvest
+        const y0 = cy + R * 0.72;
+        mb.cyl('toon', 0xe3c27a, 0, y0, 0.01, R * 1.75, R * 1.8, 0.03, { seg: 28, sz: 0.95 });
+        mb.cyl('toon', 0xe3c27a, 0, y0 + 0.08, 0.01, R * 0.86, R * 0.98, 0.16, { seg: 22 });
+        mb.cyl('toon', A1, 0, y0 + 0.035, 0.01, R * 0.99, R * 0.99, 0.045, { seg: 22 });
+      }
+      if (a === 'fez') {
+        const y0 = cy + R * 0.86;
+        mb.cyl('toon', 0xc0282d, 0, y0 + 0.08, 0.02, R * 0.62, R * 0.78, 0.2, { seg: 22 });
+        mb.cyl('ink', 0x1b1b1d, 0, y0 + 0.19, 0.02, 0.012, 0.012, 0.02, { seg: 6 });
+        mb.sphere('toon', 0x1b1b1d, 0.1, y0 + 0.08, -0.02, 0.025, { sy: 2.2, seg: 8 });   // tassel
       }
       if (a === 'leaf') {
         // a little lemon leaf sprouting from the beanie

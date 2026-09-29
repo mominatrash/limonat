@@ -96,7 +96,7 @@
   }
 
   // ------------------------------------------------------------ sound effects
-  let coinStep = 0, coinTime = 0, stepAlt = 0, jet = null;
+  let coinStep = 0, coinTime = 0, stepAlt = 0, jet = null, amb = null;
   const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
   const SYNTH = {
     step() { stepAlt ^= 1; noise(0.05, { f: stepAlt ? 900 : 700, vol: 0.05, pan: stepAlt ? 0.15 : -0.15 }); },
@@ -126,6 +126,13 @@
     buy() { for (let i = 0; i < 6; i++) tone(1318 * Math.pow(2, (i % 3) * 4 / 12), 0.12, { vol: 0.06, when: i * 0.05 }); },
     denied() { tone(220, 0.15, { type: 'square', vol: 0.05, lp: 900 }); tone(180, 0.2, { type: 'square', vol: 0.05, lp: 900, when: 0.1 }); },
     jetStart() { noise(0.7, { ft: 'bandpass', f: 300, fTo: 2400, q: 0.7, vol: 0.3, attack: 0.05 }); tone(90, 0.6, { type: 'sawtooth', slide: 240, vol: 0.12, lp: 900 }); },
+    thunder() { noise(2.2, { f: 900, fTo: 90, vol: 0.55, attack: 0.02 }); tone(48, 1.8, { type: 'sawtooth', slide: 30, vol: 0.18, lp: 160, when: 0.05 }); noise(0.25, { ft: 'highpass', f: 2500, vol: 0.2 }); },
+    baa() { tone(420, 0.5, { type: 'sawtooth', vol: 0.07, lp: 1400, vib: 9, slide: 380 }); tone(840, 0.45, { type: 'triangle', vol: 0.03, vib: 9 }); },
+    catch() { [0, 4, 7, 12].forEach((s, i) => tone(660 * Math.pow(2, s / 12), 0.25, { type: 'square', vol: 0.05, lp: 3200, when: i * 0.06 })); noise(0.3, { ft: 'bandpass', f: 1800, vol: 0.12 }); },
+    meow() { tone(700, 0.35, { type: 'triangle', slide: 900, vol: 0.06, vib: 6 }); tone(1000, 0.25, { type: 'sine', slide: 600, vol: 0.04, when: 0.15 }); },
+    chirp() { for (let i = 0; i < 3; i++) tone(2600 + i * 300, 0.07, { vol: 0.04, slide: 3400, when: i * 0.08 }); },
+    ding() { tone(1568, 0.5, { type: 'sine', vol: 0.08 }); tone(2349, 0.4, { type: 'sine', vol: 0.04, when: 0.08 }); },
+    fanfare() { [0, 4, 7, 12, 16, 19, 24].forEach((s, i) => tone(523 * Math.pow(2, s / 12), 0.35, { type: 'triangle', vol: 0.09, when: i * 0.09 })); },
     boing() { tone(220, 0.28, { type: 'triangle', slide: 880, vol: 0.12 }); tone(440, 0.2, { type: 'sine', slide: 1320, vol: 0.05, when: 0.03 }); },
     whoosh() { noise(0.3, { ft: 'bandpass', f: 800, fTo: 2500, q: 1, vol: 0.12 }); },
   };
@@ -194,6 +201,20 @@
       else if (SYNTH[name]) SYNTH[name](opts);
     },
     setMode(m) { mode = m; },
+    // looping ambience for weather: 'rain' | 'wind' | null
+    ambience(kind) {
+      if (!ensure()) return;
+      if (amb && amb.kind === kind) return;
+      if (amb) { const a = amb, t = ctx.currentTime; amb = null; a.g.gain.setTargetAtTime(0.0001, t, 0.5); a.src.stop(t + 2); }
+      if (!kind || !settings.sfx) return;
+      const src = ctx.createBufferSource(); src.buffer = getNoise(); src.loop = true;
+      const f = ctx.createBiquadFilter(); f.type = kind === 'rain' ? 'highpass' : 'bandpass';
+      f.frequency.value = kind === 'rain' ? 1400 : 420; f.Q.value = kind === 'rain' ? 0.4 : 0.8;
+      const g = ctx.createGain(); g.gain.value = 0.0001; g.gain.setTargetAtTime(kind === 'rain' ? 0.12 : 0.16, ctx.currentTime, 0.8);
+      if (kind === 'wind') { const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = 0.23; lg.gain.value = 260; l.connect(lg); lg.connect(f.frequency); l.start(); }
+      src.connect(f); f.connect(g); g.connect(sfxBus); src.start();
+      amb = { kind, src, g };
+    },
     // continuous jetpack roar (filtered noise + low rumble, with flutter)
     jet(on) {
       if (!ensure()) return;

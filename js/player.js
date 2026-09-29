@@ -135,7 +135,7 @@
       this.airW = 0; this.slideW = 0; this.laneW = 0; this.startW = 1;
       this.jumpVariant = 0; this.spinT = -1; this.spinKind = null; this.jumpCount = 0;
       this.airTime = 0; this.accel = 0; this.cheer = 0;
-      this.flying = false; this.flyW = 0; this.flyH = 0;
+      this.flying = false; this.flyW = 0; this.flyH = 0; this.ride = null;
       if (this.jetpack) this.jetpack.visible = false;
       this.hvInit = false;
       this.object.position.set(0, 0, 0);
@@ -194,7 +194,7 @@
       this.z -= speed * dt;
 
       const tx = this.laneX(this.lane);
-      const maxStep = (C.LANE_WIDTH / C.LANE_SWITCH_TIME) * dt;
+      const maxStep = (C.LANE_WIDTH / (C.LANE_SWITCH_TIME * (this.laneTimeMul || 1))) * dt;   // rain makes it slippery
       const dx = tx - this.x;
       this.prevX = this.x;
       // ease the last bit of a lane change so it doesn't stop dead
@@ -250,7 +250,7 @@
       const prevPhase = this.phase;
       this.phase = (this.phase + dt * (1.32 + speed * 0.036)) % 1;
       // footfalls: right foot at phase 0, left at 0.5
-      if (this.grounded && !this.sliding) {
+      if (this.grounded && !this.sliding && !this.ride) {
         if (prevPhase > this.phase) this.footstep('R');
         else if (prevPhase < 0.5 && this.phase >= 0.5) this.footstep('L');
       }
@@ -292,6 +292,16 @@
       this.laneW += (laneT - this.laneW) * k(16);
       A.addScaled(out, A.P.lane, this.laneW * (1 - this.slideW * 0.6));
 
+      // riding a vehicle (mine cart / bike): the vehicle system supplies the pose
+      const rd = this.ride;
+      let rideW = 0;
+      if (rd) {
+        rd.w += ((rd.leaving ? 0 : 1) - rd.w) * k(rd.leaving ? 9 : 10);
+        if (!rd.leaving) rd.pose(this.pRide || (this.pRide = A.pose()), dt, this.sliding);
+        if (this.pRide) A.lerp(out, out, this.pRide, rd.w);
+        rideW = rd.w;
+        if (rd.leaving && rd.w < 0.01) this.ride = null;
+      }
       // jetpack flight pose
       this.flyW += ((this.flying ? 1 : 0) - this.flyW) * k(this.flying ? 4 : 6);
       this.flyT += dt;
@@ -330,7 +340,7 @@
       }
 
       A.apply(r, out);
-      const plantW = (1 - this.airW) * (1 - this.slideW) * (1 - this.flyW);
+      const plantW = (1 - this.airW) * (1 - this.slideW) * (1 - this.flyW) * (1 - rideW);
       A.plant(r, plantW, lift * plantW);
       // cartoon stretch while rising fast
       const st = clamp(this.vy / C.JUMP_VELOCITY, -1, 1) * this.airW;

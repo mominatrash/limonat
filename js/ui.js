@@ -27,8 +27,11 @@
       tutLaneK: '← →', tutJumpK: '↑ / Space', tutSlideK: '↓',
       notEnough: 'ما معك عملات كافية', bought: 'صارت لك!',
       missions: 'المهام', lifetime: 'إحصائياتك', missionDone: 'مهمة منجزة!',
+      forkAhead: 'مفترق طرق! اختار مسارك', routeRich: 'طريق الكنوز', routeEasy: 'طريق أسهل',
+      w_rain: 'مطر! السكة زلقة', w_sandstorm: 'عاصفة رملية!', w_fog: 'ضباب كثيف!',
+      thiefAppears: 'حرامي الليمون! الحقه', thiefCaught: 'مسكت الماعز!', thiefEscaped: 'هرب الماعز!', rideBroken: 'انكسرت المركبة!',
       lRuns: 'جولات', lDist: 'مجموع المسافة', lCoins: 'مجموع العملات', lBest: 'أبعد مسافة', lJumps: 'قفزات', lLemons: 'ليمونات', lJet: 'طيران', lClose: 'نجاة بأعجوبة',
-      pu: { magnet: 'مغناطيس!', shield: 'درع!', boost: 'انطلاق!', double: 'عملات مضاعفة!', invincible: 'نجمة!', jetpack: 'جيت باك! طِر!', sneakers: 'حذاء النطّ!', lemonade: 'ليموناضة! نقاط وعملات مضاعفة' },
+      pu: { magnet: 'مغناطيس!', shield: 'درع!', boost: 'انطلاق!', double: 'عملات مضاعفة!', invincible: 'نجمة!', jetpack: 'جيت باك! طِر!', sneakers: 'حذاء النطّ!', minecart: 'عربة المنجم!', bike: 'بسكليت!', lemonade: 'ليموناضة! نقاط وعملات مضاعفة' },
       m: 'م',
     },
     en: {
@@ -44,8 +47,11 @@
       tutLaneK: '← →', tutJumpK: '↑ / Space', tutSlideK: '↓',
       notEnough: 'Not enough coins', bought: 'Unlocked!',
       missions: 'Missions', lifetime: 'Your stats', missionDone: 'Mission complete!',
+      forkAhead: 'Junction ahead! Pick a track', routeRich: 'Treasure route', routeEasy: 'Easy route',
+      w_rain: 'Rain! Slippery tracks', w_sandstorm: 'Sandstorm!', w_fog: 'Thick fog!',
+      thiefAppears: 'Lemon thief! Catch it', thiefCaught: 'Goat caught!', thiefEscaped: 'The goat got away!', rideBroken: 'Your ride broke!',
       lRuns: 'Runs', lDist: 'Total distance', lCoins: 'Total coins', lBest: 'Longest run', lJumps: 'Jumps', lLemons: 'Lemons', lJet: 'Flights', lClose: 'Close calls',
-      pu: { magnet: 'Magnet!', shield: 'Shield!', boost: 'Boost!', double: '2x Coins!', invincible: 'Star!', jetpack: 'Jetpack! Fly!', sneakers: 'Super Sneakers!', lemonade: 'Lemonade! 2x score & coins' },
+      pu: { magnet: 'Magnet!', shield: 'Shield!', boost: 'Boost!', double: '2x Coins!', invincible: 'Star!', jetpack: 'Jetpack! Fly!', sneakers: 'Super Sneakers!', minecart: 'Mine cart!', bike: 'Bicycle!', lemonade: 'Lemonade! 2x score & coins' },
       m: 'm',
     },
   };
@@ -58,6 +64,14 @@
 
   const UI = {
     store, fmt, t,
+    // feature modules register their own screens: UI.addScreen('pets', 'pets', true)
+    addScreen(id, state = id, menuCam = true) {
+      if (!SCREENS.includes(id)) SCREENS.push(id);
+      (VR.SCREEN_MAP = VR.SCREEN_MAP || {})[state] = id;
+      if (menuCam) (VR.MENU_STATES = VR.MENU_STATES || []).push(state);
+    },
+    // add strings for both languages from a module
+    addStrings(ar, en) { Object.assign(STR.ar, ar); Object.assign(STR.en, en); },
     get lang() { return lang; },
     setLang(l) {
       lang = l; store.set('lang', l);
@@ -204,7 +218,11 @@
       dots.innerHTML = VR.CHARACTERS.map((c, i) => `<i class="${i === index ? 'on' : ''} ${owned.has(c.id) ? 'owned' : ''}"></i>`).join('');
       const btn = $('charDone');
       $('shopBank').textContent = fmt(bank);
-      if (!owned.has(def.id)) {
+      if (!owned.has(def.id) && def.event) {
+        const E = VR.game && VR.game.S.events, have = E ? E.count(def.event) : 0, ico = E ? E.icon(def.event) : '';
+        btn.innerHTML = `<span>${have >= def.need ? t('unlock') : t('eventOnly')}</span><span class="price">${ico} ${fmt(Math.min(have, def.need))}/${fmt(def.need)}</span>`;
+        btn.dataset.mode = 'event'; btn.style.filter = have >= def.need ? '' : 'grayscale(.5) brightness(.9)';
+      } else if (!owned.has(def.id)) {
         btn.innerHTML = `<span>${t('buy')}</span><span class="price"><svg class="coin"><use href="#i-coin"/></svg>${fmt(def.price)}</span>`;
         btn.dataset.mode = 'buy';
         btn.style.filter = bank >= def.price ? '' : 'grayscale(.7) brightness(.85)';
@@ -298,6 +316,9 @@
     { id: 'jetpack',  kind: 'sum', stat: 'jetpacks',   ar: 'طِر بالجيت باك {n} مرات',        en: 'Fly the jetpack {n} times',   tiers: [1, 3, 8, 15] },
     { id: 'close',    kind: 'sum', stat: 'closeCalls', ar: 'انجُ بأعجوبة {n} مرات',          en: 'Get {n} close calls',         tiers: [3, 10, 25, 60] },
     { id: 'runs',     kind: 'sum', stat: 'runs',       ar: 'العب {n} جولات',                en: 'Play {n} runs',               tiers: [3, 10, 25, 60] },
+    { id: 'thief',    kind: 'sum', stat: 'thieves',    ar: 'امسك حرامي الليمون {n} مرات',    en: 'Catch the lemon thief {n} times', tiers: [1, 3, 8, 15] },
+    { id: 'forks',    kind: 'sum', stat: 'forks',      ar: 'اختار طريقك بـ {n} مفترقات',      en: 'Take {n} junctions',          tiers: [2, 6, 15, 30] },
+    { id: 'rides',    kind: 'sum', stat: 'rides',      ar: 'اركب مركبة {n} مرات',            en: 'Ride a vehicle {n} times',    tiers: [1, 4, 10, 20] },
   ];
   const BY_ID = Object.fromEntries(DEFS.map(d => [d.id, d]));
   const reward = (d, tier) => Math.round((60 + tier * 90) * (d.kind === 'run' ? 1.2 : 1) / 10) * 10;
@@ -307,7 +328,7 @@
       const saved = UI.store.get('missions', null);
       this.tiers = (saved && saved.tiers) || {};         // id -> next tier index
       this.active = ((saved && saved.active) || []).filter(m => BY_ID[m.id] && BY_ID[m.id].tiers[m.tier] !== undefined);
-      this.life = Object.assign({ runs: 0, dist: 0, coins: 0, jumps: 0, slides: 0, lemons: 0, lemonade: 0, powerups: 0, jetpacks: 0, closeCalls: 0, bestDist: 0 },
+      this.life = Object.assign({ runs: 0, dist: 0, coins: 0, jumps: 0, slides: 0, lemons: 0, lemonade: 0, powerups: 0, jetpacks: 0, closeCalls: 0, bestDist: 0, thieves: 0, forks: 0, rides: 0, weather: 0 },
         UI.store.get('lifetime', {}));
       while (this.active.length < 3) this.active.push(this.pick());
       this.onComplete = null;        // (mission, reward) => void

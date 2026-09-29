@@ -213,7 +213,7 @@
       }
     }
     // bonus lemon (the "gem" pickup) replaces a coin
-    if (!safe && g.rnd() < VR.CONFIG.LEMON_CHANCE && g.coins.length > 4) {
+    if (!safe && g.rnd() < VR.CONFIG.LEMON_CHANCE * (g.lemonMul || 1) && g.coins.length > 4) {
       const i = (g.rnd() * g.coins.length) | 0;
       g.gems.push(g.coins.splice(i, 1)[0]);
     }
@@ -247,6 +247,7 @@
         if (verify(g)) plan = g;
       }
       if (!plan) { plan = new Plan(rnd, difficulty, speed); plan.patternName = 'fallback'; }
+      plan.lemonMul = ctx.lemonMul || 1;
       addCoins(plan, safe);
       if (!safe && rnd() < ctx.powerupChance && plan.coins.length > 6) {
         const i = 3 + ((rnd() * (plan.coins.length - 6)) | 0);

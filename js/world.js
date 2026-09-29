@@ -69,21 +69,36 @@
       for (const key in this.pool.factories) { const o = this.pool.get(key); this.pool.release(o); }
     }
 
-    reset() {
+    /**
+     * opts.seed    -> the same seed always builds the same railway (daily challenge, story)
+     * opts.biomes  -> fixed biome sequence (story levels); otherwise the normal rotation
+     * opts.forks   -> junctions where the player picks the next biome (default on)
+     * opts.styles  -> style weight multipliers {tunnel, bridge, station}
+     */
+    reset(opts = {}) {
       while (this.chunks.length) this.releaseChunk(this.chunks[0]);
       this.collect.clear();
+      this.opts = opts;
+      this.rnd = opts.seed != null ? VR.rng(opts.seed) : Math.random;
       this.nextZ = 60;                // one chunk behind the player (visible from the menu camera)
       this.chunkIndex = 0;
-      this.biomeOrder = VR.BIOME_ORDER.slice();
-      this.biomeIdx = (Math.random() * this.biomeOrder.length) | 0;
+      this.biomeOrder = (opts.biomes || VR.BIOME_ORDER).slice();
+      this.biomeIdx = opts.biomes ? 0 : (this.rnd() * this.biomeOrder.length) | 0;
       const force = new URLSearchParams(location.search).get('biome');
       if (force && this.biomeOrder.includes(force)) this.biomeIdx = this.biomeOrder.indexOf(force);
+      this.biomeKey = this.biomeOrder[this.biomeIdx % this.biomeOrder.length];
       this.biomeLeft = C.BIOME_MIN_CHUNKS;
+      this.segLen = this.biomeLeft;
       this.styleQueue = [];
       this.sinceSpecial = 0;
+      this.fork = null;               // {chunkId, z, options:[left, mid, right], decided}
+      this.nextBiomeForced = null;
+      this.route = null;              // perk of the chosen route for the current biome segment
     }
 
-    currentBiomeKey() { return this.biomeOrder[this.biomeIdx % this.biomeOrder.length]; }
+    currentBiomeKey() { return this.biomeKey; }
+    // the biome after the current one in the rotation (or the fixed story order)
+    upcomingBiome(step = 1) { return this.biomeOrder[(this.biomeIdx + step) % this.biomeOrder.length]; }
 
     nextStyle(biome, difficulty) {
       if (this.styleQueue.length) return this.styleQueue.shift();
@@ -93,27 +108,44 @@
       const w = Object.assign({}, biome.styleWeights);
       // "environmental complexity" rises with difficulty
       w.tunnel *= 0.6 + difficulty; w.bridge *= 0.6 + difficulty; w.station *= 0.8 + difficulty * 0.5;
-      let r = Math.random() * (w.normal + w.tunnel + w.bridge + w.station);
+      const so = this.opts && this.opts.styles;
+      if (so) for (const k in so) w[k] *= so[k];
+      let r = this.rnd() * (w.normal + w.tunnel + w.bridge + w.station);
       let s = 'normal';
       for (const k of ['normal', 'tunnel', 'bridge', 'station']) { r -= w[k]; if (r <= 0) { s = k; break; } }
       if (s === 'normal') { this.sinceSpecial++; return s; }
       this.sinceSpecial = 0;
       if (s === 'tunnel') { this.styleQueue.push('tunnel_end'); return 'tunnel_start'; }
-      if (s === 'bridge' && Math.random() < 0.5) this.styleQueue.push('bridge');
+      if (s === 'bridge' && this.rnd() < 0.5) this.styleQueue.push('bridge');
       return s;
     }
 
-    spawnChunk(difficulty, speed) {
+    spawnChunk(difficulty, speed, game) {
       const idx = this.chunkIndex++;
+      // content depends only on the chunk's own distance (not on frame timing),
+      // so a seeded run is identical for everyone
+      if (game) {
+        const d = Math.max(0, idx * L - C.CHUNKS_AHEAD * L);
+        difficulty = game.difficultyAt(d); speed = game.speedAt(d);
+      }
+      if (this.route && this.route.easy) difficulty = Math.max(0, difficulty - 0.22);
       // biome rotation (never switch mid-tunnel / mid-bridge)
       if (this.biomeLeft <= 0 && !this.styleQueue.length) {
         this.biomeIdx++;
-        this.biomeLeft = C.BIOME_MIN_CHUNKS + ((Math.random() * (C.BIOME_MAX_CHUNKS - C.BIOME_MIN_CHUNKS)) | 0);
+        this.biomeKey = this.nextBiomeForced || this.biomeOrder[this.biomeIdx % this.biomeOrder.length];
+        this.route = this.nextRoute || null;
+        this.nextBiomeForced = null; this.nextRoute = null;
+        this.biomeLeft = C.BIOME_MIN_CHUNKS + ((this.rnd() * (C.BIOME_MAX_CHUNKS - C.BIOME_MIN_CHUNKS)) | 0);
+        this.segLen = this.biomeLeft;
       }
       this.biomeLeft--;
       const biomeKey = this.currentBiomeKey();
       const biome = VR.BIOMES[biomeKey];
-      const style = this.nextStyle(biome, difficulty);
+      // JUNCTION: far enough before the biome ends that the choice is made
+      // before the next biome's first chunk is built
+      const wantFork = (!this.opts || this.opts.forks !== false) && !this.fork && this.biomeLeft === C.CHUNKS_AHEAD + 2
+        && this.segLen >= C.CHUNKS_AHEAD + 4 && idx > 6 && !this.styleQueue.length;
+      const style = wantFork ? 'normal' : this.nextStyle(biome, difficulty);
       const z0 = this.nextZ;
       this.nextZ -= L;
 
@@ -132,18 +164,20 @@
       else if (!isTunnel) {
         put('ground_' + biomeKey);
         const off = style === 'station' ? -6 : 0;
-        const v1 = (Math.random() * VR.BIOME_VARIANTS) | 0;
-        let v2 = (Math.random() * VR.BIOME_VARIANTS) | 0; if (v2 === v1) v2 = (v2 + 1) % VR.BIOME_VARIANTS;
+        const v1 = (this.rnd() * VR.BIOME_VARIANTS) | 0;
+        let v2 = (this.rnd() * VR.BIOME_VARIANTS) | 0; if (v2 === v1) v2 = (v2 + 1) % VR.BIOME_VARIANTS;
         put(`scen_${biomeKey}_${v1}`, off);
         put(`scen_${biomeKey}_${v2}`, -off, true);
       }
 
       // ---- content
-      const safe = idx < C.SAFE_START_CHUNKS + 2;
+      const safe = idx < C.SAFE_START_CHUNKS + 2 || wantFork;
+      const rich = this.route && this.route.rich;
       const plan = VR.Patterns.generate({
-        rnd: Math.random, difficulty, speed, safe, style,
-        powerupChance: 0.16 + difficulty * 0.08,
+        rnd: this.rnd, difficulty, speed, safe, style,
+        powerupChance: (0.16 + difficulty * 0.08) * (rich ? 1.8 : 1), lemonMul: (rich ? 2 : 1) * ((this.opts && this.opts.lemonMul) || 1),
       });
+      if (wantFork) this.makeFork(chunk, z0);
       chunk.pattern = plan.patternName;
 
       for (const o of plan.obstacles) {
@@ -160,7 +194,36 @@
       for (const p of plan.powerups) this.collect.spawnPowerUp(p.type, p.x * LW, p.y, z0 - p.z, idx);
 
       this.chunks.push(chunk);
+      if (game) game.emit('chunk', chunk, plan);
       return chunk;
+    }
+
+    // ------------------------------------------------------------ junctions
+    // Three signs over the tracks: left and right each lead to a different
+    // next biome with a route perk; the middle one keeps the surprise.
+    makeFork(chunk, z0) {
+      const cur = this.biomeKey, pool = this.biomeOrder.filter(b => b !== cur);
+      const pick = () => pool.splice((this.rnd() * pool.length) | 0, 1)[0];
+      const a = pick(), b = pick() || a;
+      const routes = [{ rich: true }, { easy: true }];
+      if (this.rnd() < 0.5) routes.reverse();
+      const opts = [{ biome: a, route: routes[0] }, { biome: null, route: null }, { biome: b, route: routes[1] }];
+      const gz = z0 - 30;
+      this.fork = { chunkId: chunk.id, z: gz, options: opts, decided: false, warned: false };
+      const gate = VR.buildForkGate(opts);
+      gate.position.set(0, 0, gz);
+      this.scene.add(gate);
+      (chunk.extras || (chunk.extras = [])).push(gate);
+    }
+    // called every frame; returns the choice once the player passes the gate
+    checkFork(player) {
+      const f = this.fork;
+      if (!f || f.decided || player.z > f.z) return null;
+      f.decided = true;
+      let o = f.options[player.lane + 1];
+      if (!o.biome) o = f.options[this.rnd() < 0.5 ? 0 : 2];      // middle = surprise
+      this.nextBiomeForced = o.biome; this.nextRoute = o.route;
+      return o;
     }
 
     spawnTrain(chunk, t, z0) {
@@ -191,6 +254,8 @@
 
     releaseChunk(chunk) {
       for (const p of chunk.parts) this.pool.release(p);
+      if (chunk.extras) for (const e of chunk.extras) { this.scene.remove(e); if (e.userData.dispose) e.userData.dispose(); }
+      if (this.fork && this.fork.chunkId === chunk.id) this.fork = null;
       for (const o of chunk.obstacles) for (const p of o.parts) this.pool.release(p);
       const set = new Set(chunk.obstacles);
       this.obstacles = this.obstacles.filter(o => !set.has(o));
@@ -200,7 +265,7 @@
 
     update(dt, player, speed, difficulty, game, keepBehind = false) {
       // stream chunks
-      while (this.nextZ > player.z - C.CHUNKS_AHEAD * L) this.spawnChunk(difficulty, speed);
+      while (this.nextZ > player.z - C.CHUNKS_AHEAD * L) this.spawnChunk(difficulty, speed, game);
       while (!keepBehind && this.chunks.length && this.chunks[0].z0 - L > player.z + 14) this.releaseChunk(this.chunks[0]);
 
       // moving trains
@@ -221,7 +286,8 @@
     // shift everything back toward the origin (float precision on long runs)
     shift(dz) {
       this.nextZ += dz;
-      for (const c of this.chunks) { c.z0 += dz; for (const p of c.parts) p.position.z += dz; }
+      for (const c of this.chunks) { c.z0 += dz; for (const p of c.parts) p.position.z += dz; if (c.extras) for (const e of c.extras) e.position.z += dz; }
+      if (this.fork) this.fork.z += dz;
       for (const o of this.obstacles) { o.z += dz; for (const p of o.parts) p.position.z += dz; }
       this.collect.shift(dz);
     }

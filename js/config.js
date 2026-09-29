@@ -56,9 +56,11 @@ VR.CONFIG = {
     invincible:  { duration: 7,  label: 'Star' },
     jetpack:     { duration: 8,  label: 'Jetpack', height: 3.4, grace: 1.6 },
     sneakers:    { duration: 12, label: 'Super Sneakers', jumpFactor: 1.4 },
+    minecart:    { duration: 14, label: 'Mine cart' },
+    bike:        { duration: 14, label: 'Bicycle' },
   },
   // how often each power-up appears (relative)
-  POWERUP_WEIGHTS: { magnet: 1, shield: 1, boost: 0.8, double: 1, invincible: 0.7, jetpack: 0.8, sneakers: 0.9 },
+  POWERUP_WEIGHTS: { magnet: 1, shield: 1, boost: 0.8, double: 1, invincible: 0.7, jetpack: 0.8, sneakers: 0.9, minecart: 0.6, bike: 0.6 },
   MAGNET_RADIUS: 6,
 
   // ---------- Lemons -> Lemonade ----------
@@ -67,6 +69,11 @@ VR.CONFIG = {
   // Lemons picked up during a rush add `extend` seconds to it.
   LEMONADE: { need: 5, duration: 10, extend: 2 },
   LEMON_CHANCE: 0.42,         // chance a (non-safe) chunk holds a lemon
+
+  // ---------- Online leaderboard (optional) ----------
+  // Create a free Supabase project, run the SQL from README.md, then paste
+  // the project URL and the "anon public" key here.
+  LEADERBOARD: { url: '', key: '' },
 
   // ---------- Camera ----------
   CAMERA_HEIGHT: 4.3,

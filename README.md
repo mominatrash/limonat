@@ -96,3 +96,45 @@ Debug URL options: `?biome=city` start in a biome, `?style=tunnel` force a track
 
 Saves (best, coins, skins, settings) use `localStorage` with the same keys as v1, so
 existing progress carries over.
+
+## Modes & features (v4)
+
+| Feature | File | Notes |
+|---|---|---|
+| Junctions | `world.js` (`makeFork`, `checkFork`), `prefabs.js` (`buildForkGate`) | Pick the next biome by lane; left/right carry a route perk (treasure / easy) |
+| Weather | `weather.js` | Rain (slippery lanes, lightning), sandstorm, fog; sky + fog + light blend |
+| Lemon thief | `thief.js` | Goat with a lemon sack; catch it for coins + lemons |
+| Vehicles | `vehicles.js` | Mine cart & cargo bike pickups; absorb one crash |
+| Pets | `pets.js` | Cat (next lane) and canary (both lanes, lemons too) |
+| Lemonade stand | `stand.js` | Lemons are banked; idle income, sell, 10 upgrade levels |
+| Character creator | `creator.js` | Colours per part, accessory, scarf |
+| Story mode | `story.js` | 8 seeded levels, dialogue, finish line, 3 stars |
+| Seasonal events | `events.js` | Olive harvest (Oct–Nov), Ramadan, winter; Settings -> Season to preview |
+| Daily challenge + ghost | `daily.js` | Same seed for everyone; share link `#c=seed.score.name.data` |
+| Leaderboard | `board.js` | Friends tab offline; global/today tabs with Supabase |
+
+Every feature is a *system* (`VR.SYSTEMS`) with optional hooks:
+`bind, runStart(opts), update(dt), chunk(chunk, plan), runEnd(summary), reset, leaveRun,
+state(s), menuUpdate(dt), menuCam(state), powerUp(type), absorbCrash(obstacle), warm(on), shift(dz)`.
+`game.start({ mode, seed, biomes, styles, forks, weather, thief, lemonMul })` starts any kind of run.
+
+### Online leaderboard (optional, free)
+1. Create a project at supabase.com.
+2. SQL editor -> run:
+```sql
+create table scores (
+  id bigint generated always as identity primary key,
+  name text not null check (char_length(name) <= 16),
+  score integer not null check (score >= 0 and score < 100000000),
+  dist integer not null default 0,
+  mode text not null default 'endless',
+  day integer not null default 0,
+  created_at timestamptz default now()
+);
+alter table scores enable row level security;
+create policy "anyone can read"   on scores for select using (true);
+create policy "anyone can insert" on scores for insert with check (true);
+```
+3. Project settings -> API: copy the Project URL and the `anon` public key into
+   `CONFIG.LEADERBOARD` in `js/config.js`. Scores are sent when a player has a name
+   (set on the Daily challenge screen).

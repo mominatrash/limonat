@@ -99,6 +99,18 @@
   .topbar .group { display: flex; gap: 8px; align-items: center; }
   .menu-bottom { display: flex; flex-direction: column; align-items: center; gap: 14px; width: 100%; }
   .menu-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+  .menu-modes { display: flex; gap: 10px; justify-content: center; width: min(460px, 100%); }
+  .menu-modes .btn { flex: 1; font-size: 18px; min-height: 50px; padding: 10px 14px; }
+  .menu-tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; width: min(460px, 100%); }
+  .tile { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 9px 2px 8px; border-radius: 16px; border: 1px solid var(--edge);
+    background: var(--glass); color: var(--text); font: inherit; font-weight: 700; font-size: 12.5px; cursor: pointer; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+    box-shadow: 0 4px 0 rgba(0,0,0,.3); transition: transform .12s; white-space: nowrap; }
+  .tile:hover { transform: translateY(-2px); } .tile:active { transform: translateY(3px); box-shadow: 0 1px 0 rgba(0,0,0,.3); }
+  .tile:focus-visible { outline: 3px solid var(--lemon); outline-offset: 2px; }
+  .tile svg { width: 26px; height: 26px; }
+  .tile .dot { position: absolute; top: 6px; inset-inline-end: 10px; width: 10px; height: 10px; border-radius: 50%; background: var(--danger); box-shadow: 0 0 0 2px rgba(0,0,0,.4); }
+  @media (max-width: 380px) { .tile span { font-size: 11px; } .tile svg { width: 22px; height: 22px; } }
+  @media (max-height: 560px) { .menu-modes .btn { min-height: 44px; font-size: 16px; } .tile { padding: 6px 2px; } .tile svg { width: 22px; height: 22px; } #menu .hint { display: none; } }
   .menu-top { display: flex; flex-direction: column; align-items: center; gap: 8px; }
   /* the hero is framed in the space the menu leaves free (see Game.menuFrame) */
   .menu-main { flex: 1; width: 100%; display: flex; flex-direction: column; align-items: center; justify-content: space-between; min-height: 0; }
@@ -294,6 +306,11 @@
   <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13a1 1 0 0 0 1.5.9l10-6.5a1 1 0 0 0 0-1.8l-10-6.5A1 1 0 0 0 8 5.5z" fill="currentColor"/></symbol>
   <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="12" cy="12" r="5" fill="none" stroke="currentColor" stroke-width="2.2"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/></symbol>
   <symbol id="i-bolt" viewBox="0 0 24 24"><path d="M13 2L4 14h7l-1 8 9-12h-7z" fill="currentColor"/></symbol>
+  <symbol id="i-brush" viewBox="0 0 24 24"><path d="M20 3c-3 1-8 6-10 9l2 2c3-2 8-7 9-10zM8 14c-2 0-4 2-4 4 0 1-1 2-2 2 2 2 7 1 8-2z" fill="currentColor"/></symbol>
+  <symbol id="i-paw" viewBox="0 0 24 24"><ellipse cx="12" cy="16" rx="5" ry="4" fill="currentColor"/><circle cx="6" cy="10" r="2.2" fill="currentColor"/><circle cx="10" cy="6.5" r="2.2" fill="currentColor"/><circle cx="14" cy="6.5" r="2.2" fill="currentColor"/><circle cx="18" cy="10" r="2.2" fill="currentColor"/></symbol>
+  <symbol id="i-stand" viewBox="0 0 24 24"><path d="M3 9l2-5h14l2 5z" fill="#ffd23f"/><path d="M3 9h18v1.5H3z" fill="#fff"/><rect x="5" y="11" width="14" height="9" rx="1" fill="currentColor"/><circle cx="10" cy="15" r="2" fill="#ffd23f"/><rect x="13" y="13" width="3" height="5" rx="1" fill="#bfe6ff"/></symbol>
+  <symbol id="i-cal" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3" fill="currentColor"/><rect x="3" y="5" width="18" height="5" rx="2" fill="#ff5a4f"/><path d="M8 3v4M16 3v4" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/><text x="12" y="19" font-size="8" font-weight="900" text-anchor="middle" fill="#1a1f2e" font-family="Arial">1</text></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M3 5c3-1 6-1 9 1v14c-3-2-6-2-9-1z" fill="currentColor"/><path d="M21 5c-3-1-6-1-9 1v14c3-2 6-2 9-1z" fill="currentColor" opacity=".75"/></symbol>
   <symbol id="i-shirt" viewBox="0 0 24 24"><path d="M8 3l-5 3 2 4 2-1v12h10V9l2 1 2-4-5-3c-.5 1.5-2 2.5-4 2.5S8.5 4.5 8 3z" fill="currentColor"/></symbol>
   <symbol id="i-home" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9a1 1 0 0 1-1 1h-5v-6h-4v6H5a1 1 0 0 1-1-1v-9z" fill="currentColor"/></symbol>
   <symbol id="i-retry" viewBox="0 0 24 24"><path d="M12 5V2L7 6l5 4V7a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7z" fill="currentColor"/></symbol>
@@ -314,6 +331,8 @@
   <symbol id="p-double" viewBox="0 0 24 24"><circle cx="9" cy="13" r="6.5" fill="#ffcf3a" stroke="#b97400" stroke-width="1.4"/><circle cx="15" cy="10" r="6.5" fill="#ffdf6a" stroke="#b97400" stroke-width="1.4"/><text x="15" y="13.5" font-size="8" font-weight="900" text-anchor="middle" fill="#7a4d00" font-family="Arial">x2</text></symbol>
   <symbol id="p-jetpack" viewBox="0 0 24 24"><rect x="5" y="3" width="14" height="13" rx="3" fill="#2a2f3a"/><rect x="4" y="3" width="6" height="13" rx="3" fill="#ff7a2f"/><rect x="14" y="3" width="6" height="13" rx="3" fill="#ff7a2f"/><rect x="4" y="8" width="16" height="1.6" fill="#dfe5ec"/><path d="M5.5 17h3l-1.5 5zM15.5 17h3l-1.5 5z" fill="#ffb347"/></symbol>
   <symbol id="p-sneakers" viewBox="0 0 24 24"><path d="M3 12c0-2 1-4 3-4h3l2 2 4 1c3 .6 6 1.6 6 4v1H3z" fill="#9b7bff"/><rect x="2.5" y="16" width="19" height="2.6" rx="1.3" fill="#fff"/><path d="M6 20.5c1.5 1 3 1 4.5 0M13 20.5c1.5 1 3 1 4.5 0" stroke="#b9a2ff" stroke-width="1.6" fill="none" stroke-linecap="round"/><path d="M9 11h2M11 12.5h2" stroke="#fff" stroke-width="1.2" stroke-linecap="round"/></symbol>
+  <symbol id="p-minecart" viewBox="0 0 24 24"><path d="M3 7h18l-2 9H5z" fill="#c0703a"/><rect x="2" y="6" width="20" height="2" rx="1" fill="#5a2e18"/><circle cx="8" cy="19" r="2.4" fill="#2b2f35"/><circle cx="16" cy="19" r="2.4" fill="#2b2f35"/><circle cx="12" cy="6" r="2" fill="#ffd23f"/></symbol>
+  <symbol id="p-bike" viewBox="0 0 24 24"><circle cx="6" cy="16" r="4" fill="none" stroke="#3ec1ff" stroke-width="2"/><circle cx="18" cy="16" r="4" fill="none" stroke="#3ec1ff" stroke-width="2"/><path d="M6 16l4-7h5l3 7M10 9l2 7h-6M15 9l1-3h2" fill="none" stroke="#fff" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></symbol>
   <symbol id="p-lemonade" viewBox="0 0 24 24"><path d="M6 6h12l-1.6 14.2a2 2 0 0 1-2 1.8H9.6a2 2 0 0 1-2-1.8z" fill="#fff" fill-opacity=".25" stroke="#fff" stroke-width="1.3"/><path d="M6.9 10h10.2l-1.2 10a1.4 1.4 0 0 1-1.4 1.2H9.5A1.4 1.4 0 0 1 8.1 20z" fill="#ffe14a"/><circle cx="17" cy="6" r="3.6" fill="#ffe14a" stroke="#c98a00" stroke-width="1"/><path d="M17 2.6v6.8M13.6 6h6.8" stroke="#c98a00" stroke-width=".8"/><path d="M10 3l1.6 7" stroke="#ff6b5b" stroke-width="1.4" stroke-linecap="round"/><circle cx="10.5" cy="14" r=".9" fill="#fff"/><circle cx="13" cy="17" r=".7" fill="#fff"/></symbol>
   <symbol id="p-invincible" viewBox="0 0 24 24"><path d="M12 2l2.9 6.3 6.9.7-5.2 4.6 1.5 6.8L12 17l-6.1 3.4 1.5-6.8L2.2 9l6.9-.7z" fill="#ffd23f" stroke="#c98a00" stroke-width="1.2"/></symbol>
 </svg>
@@ -349,9 +368,16 @@
   </div>
   <div class="menu-bottom rise" style="animation-delay:.1s">
     <button class="btn primary pulse" id="playBtn"><svg><use href="#i-play"/></svg><span data-i18n="play">العب</span></button>
-    <div class="menu-row">
-      <button class="btn" id="charBtn"><svg><use href="#i-shirt"/></svg><span data-i18n="characters">الشخصيات</span></button>
-      <button class="btn" id="missionsBtn"><svg><use href="#i-target"/></svg><span data-i18n="missions">المهام</span></button>
+    <div class="menu-modes">
+      <button class="btn mode" id="dailyBtn"><svg><use href="#i-cal"/></svg><span data-i18n="daily">تحدّي اليوم</span></button>
+      <button class="btn mode" id="storyBtn"><svg><use href="#i-book"/></svg><span data-i18n="story">القصة</span></button>
+    </div>
+    <div class="menu-tiles">
+      <button class="tile" id="charBtn"><svg><use href="#i-shirt"/></svg><span data-i18n="characters">الشخصيات</span></button>
+      <button class="tile" id="petsBtn"><svg><use href="#i-paw"/></svg><span data-i18n="pets">الحيوانات</span></button>
+      <button class="tile" id="standBtn"><svg><use href="#i-stand"/></svg><span data-i18n="stand">البسطة</span><i class="dot" id="standDot" hidden></i></button>
+      <button class="tile" id="missionsBtn"><svg><use href="#i-target"/></svg><span data-i18n="missions">المهام</span></button>
+      <button class="tile" id="boardBtn"><svg><use href="#i-trophy"/></svg><span data-i18n="board">المتصدرين</span></button>
     </div>
     <p class="hint" data-i18n-html="controls"></p>
   </div>
@@ -485,6 +511,16 @@
 <script src="js/world.js"></script>
 <script src="js/player.js"></script>
 <script src="js/ui.js"></script>
+<script src="js/weather.js"></script>
+<script src="js/thief.js"></script>
+<script src="js/vehicles.js"></script>
+<script src="js/pets.js"></script>
+<script src="js/stand.js"></script>
+<script src="js/creator.js"></script>
+<script src="js/story.js"></script>
+<script src="js/events.js"></script>
+<script src="js/daily.js"></script>
+<script src="js/board.js"></script>
 <script src="js/game.js"></script>
 </body>
 </html>

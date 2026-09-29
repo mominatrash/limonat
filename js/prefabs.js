@@ -17,6 +17,60 @@
   const PI = Math.PI;
   VR.HALF_TRACK = HALF_TRACK;
 
+  // ------------------------------------------------------------ junction gate
+  // Built per junction (its signs name the biomes on offer), removed with its chunk.
+  function forkSign(o, dir) {
+    const cv = document.createElement('canvas'); cv.width = 512; cv.height = 256;
+    const c = cv.getContext('2d');
+    const ar = !VR.UI || VR.UI.lang === 'ar';
+    const g = c.createLinearGradient(0, 0, 0, 256);
+    g.addColorStop(0, o.biome ? '#1f7a4d' : '#3b3f8f'); g.addColorStop(1, o.biome ? '#135c38' : '#262a6b');
+    c.fillStyle = g; c.fillRect(0, 0, 512, 256);
+    c.strokeStyle = '#ffd43b'; c.lineWidth = 10; c.strokeRect(8, 8, 496, 240);
+    // arrow
+    c.save(); c.translate(256, 70); c.rotate(dir * 0.62); c.fillStyle = '#fff';
+    c.beginPath(); c.moveTo(0, -46); c.lineTo(36, -6); c.lineTo(13, -6); c.lineTo(13, 40); c.lineTo(-13, 40); c.lineTo(-13, -6); c.lineTo(-36, -6); c.closePath(); c.fill();
+    c.restore();
+    const B = o.biome && VR.BIOMES[o.biome];
+    const name = B ? (ar ? B.name : B.nameEn) : (ar ? 'مفاجأة!' : 'Surprise!');
+    c.fillStyle = '#fff'; c.textAlign = 'center'; c.textBaseline = 'middle';
+    c.font = '800 60px "Baloo Bhaijaan 2", Tahoma, sans-serif'; c.direction = ar ? 'rtl' : 'ltr';
+    c.fillText(name, 256, 152);
+    const perk = !o.route ? (ar ? '؟ طريق عشوائي' : '? random route') : o.route.rich ? (ar ? 'كنوز: ليمون وقدرات أكثر' : 'Riches: more lemons & power-ups') : (ar ? 'طريق أسهل' : 'Easier route');
+    c.font = '700 34px "Baloo Bhaijaan 2", Tahoma, sans-serif'; c.fillStyle = '#ffe680';
+    c.fillText(perk, 256, 210);
+    const tex = new T.CanvasTexture(cv); tex.colorSpace = T.SRGBColorSpace; tex.anisotropy = 4;
+    return tex;
+  }
+  VR.buildForkGate = function (opts) {
+    const g = new T.Group();
+    const mb = new VR.MB(11);
+    const X = HALF_TRACK + 1.3, top = 7.3;
+    for (const s of [-1, 1]) {
+      mb.box('metal', 0x39424d, s * X, top / 2, 0, 0.34, top, 0.34);
+      mb.box('concrete', 0x8e8a84, s * X, 0.15, 0, 0.9, 0.3, 0.9);
+    }
+    mb.box('metal', 0x39424d, 0, top, 0, X * 2 + 0.4, 0.3, 0.3);
+    for (let i = -1; i <= 1; i++) {
+      mb.box('metal', 0x2b3038, i * LW - 0.7, top - 0.35, 0, 0.06, 0.5, 0.06);
+      mb.box('metal', 0x2b3038, i * LW + 0.7, top - 0.35, 0, 0.06, 0.5, 0.06);
+      mb.box('glow', 0xffe9a8, i * LW, top - 0.72 - 1.18, 0.06, 2.3, 0.05, 0.05);           // light strip under each sign
+    }
+    const frame = mb.build({ cast: true, receive: false });
+    g.add(frame);
+    const geos = [], mats = [], texs = [];
+    const plane = new T.PlaneGeometry(2.3, 1.15); geos.push(plane);
+    opts.forEach((o, i) => {
+      const tex = forkSign(o, i - 1); texs.push(tex);
+      const m = new T.MeshBasicMaterial({ map: tex, color: new T.Color(1.25, 1.25, 1.25), side: T.DoubleSide, fog: true }); mats.push(m);
+      const sign = new T.Mesh(plane, m);
+      sign.position.set((i - 1) * LW, top - 0.6 - 0.575, 0.08);
+      g.add(sign);
+    });
+    g.userData.dispose = () => { geos.forEach(x => x.dispose()); mats.forEach(x => x.dispose()); texs.forEach(x => x.dispose()); frame.traverse(m => { if (m.geometry) m.geometry.dispose(); }); };
+    return g;
+  };
+
   // ---------------------------------------------------------------- station sign texture
   const SIGN_W = 512, SIGN_H = 128;
   function paintSign(ctx) {
