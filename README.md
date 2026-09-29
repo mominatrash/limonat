@@ -68,6 +68,7 @@ if the frame rate stays under ~26 fps.
 |---|---|
 | `js/gfx.js` | textures, materials, `VR.MB` mesh builder, pooling, sky, post-processing |
 | `js/character.js` | the hero model, skins (`VR.CHARACTERS`), scarf cloth |
+| `js/heroes.js` | Scout / Sprinter / Ninja: skinned meshes on the hero skeleton, parametric surfaces, zoned PBR material, spring cloth |
 | `js/anim.js` | poses, gait curves, blending, foot planting |
 | `js/player.js` | movement + animation state machine, hair springs |
 | `js/props.js` | trees, houses, lemons, crates, lamps, buildings… |
@@ -86,6 +87,11 @@ if the frame rate stays under ~26 fps.
 ## Adding things
 
 - **Skin**: add an entry to `VR.CHARACTERS` in `character.js` (palette colours, `price`, optional `scarf`).
+- **Detailed runner** (`heroes.js`): a `kid` definition with `face` (eyes, brows, lids, smile, jaw…), optional `chains`
+  (spring bones for cloth / gear) and a `build(sb, gear)` that lays surfaces on the body: `torsoFn`/`pelvisFn`/`armFn`/`legFn`
+  ring surfaces, `panel` (raised pockets, bibs, patches), `onLine` (seams, straps, piping), `sweep` (tubes: laces, wraps,
+  hair clumps), `shoe`, `fist`, `hairCap`/`clump`. Each vertex carries a material zone from `M` (skin, cotton, denim,
+  leather, rubber, metal, knit, hair, canvas, mesh, satin…): roughness, metalness and a micro-surface pattern.
 - **Biome**: add to `VR.BIOMES` in `biomes.js` and to `VR.BIOME_ORDER`.
 - **Obstacle**: `VR.OBSTACLE_TYPES` in `prefabs.js`, then use it in `patterns.js`.
 - **Power-up**: `CONFIG.POWERUPS`, a 3D icon in `collectibles.js` (`PU_BUILD`), an SVG `p-<id>` symbol in `index.html`.

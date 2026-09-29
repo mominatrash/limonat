@@ -390,12 +390,13 @@
         for (const ch of r.springs) ch.bones.forEach((b, i) => {
           const st = ch.st[i], g = ch.g[i];
           const fl = Math.sin(tt * (11 + i * 2.3) + i * 1.7) * ch.flutter * (running ? 0.4 + speedN : 0.15) * g;
-          const tx = clamp(-acc.z * 0.004 * g + drag * g * 2.2 + fl, -1.4, 1.4);
+          const tx = clamp(-acc.z * 0.004 * g + drag * g * (ch.dragK ?? 2.2) + acc.y * (ch.ay || 0) * g + fl, -1.4, 1.4);
           const tz = clamp(acc.x * 0.003 * g + fl * 0.6, -0.8, 0.8);
           st.vx += ((tx - st.x) * ch.k - st.vx * ch.d) * dt;
           st.vz += ((tz - st.z) * ch.k - st.vz * ch.d) * dt;
           st.x += st.vx * dt; st.z += st.vz * dt;
           b.rotation.x = b.userData.rx0 + st.x * ch.sx * (i === 0 ? 1 : 0.45);
+          if (ch.dragK === 0) b.rotation.z = 0;
           b.rotation.z = st.z * ch.sz * (i === 0 ? 1 : 0.5);
         });
       }

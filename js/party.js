@@ -638,7 +638,7 @@
       rig.root.visible = false;
       this.g.scene.add(rig.root);
       const meshes = [];
-      rig.root.traverse(o => { if (o.isMesh) meshes.push({ m: o, mat: o.material, outline: o.material === VR.charMaterials.outlineMat }); });
+      rig.root.traverse(o => { if (o.isMesh) meshes.push({ m: o, mat: o.material, outline: o.material === VR.charMaterials.outlineMat || !!o.userData.outline }); });
       const ghostMat = new T.MeshBasicMaterial({ color: this.mode === 'coop' ? 0xa8ffc0 : 0xffe89a, transparent: true, opacity: 0.45, depthWrite: false, fog: false });
       this.av = { rig, tag, meshes, ghostMat, ghost: false, pose: A.pose(), phase: 0 };
     }
