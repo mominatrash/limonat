@@ -111,7 +111,6 @@ existing progress carries over.
 | Story mode | `story.js` | 8 seeded levels, dialogue, finish line, 3 stars |
 | Seasonal events | `events.js` | Olive harvest (Oct–Nov), Ramadan, winter; Settings -> Season to preview |
 | Daily challenge + ghost | `daily.js` | Same seed for everyone; share link `#c=seed.score.name.data` |
-| Leaderboard | `board.js` | Private: only you + friends you played with (links / online); nothing uploaded |
 
 Every feature is a *system* (`VR.SYSTEMS`) with optional hooks:
 `bind, runStart(opts), update(dt), chunk(chunk, plan), runEnd(summary), reset, leaveRun,
@@ -119,7 +118,5 @@ state(s), menuUpdate(dt), menuCam(state), powerUp(type), absorbCrash(obstacle), 
 `game.start({ mode, seed, biomes, styles, forks, weather, thief, lemonMul })` starts any kind of run.
 
 ### Privacy
-There is no public leaderboard and no scores are uploaded anywhere. The board only lists
-you and friends you actually played with (a challenge link you opened, or an online
-race / co-op round), and it lives on your own phone. Online rooms are only reachable
+There is no leaderboard and no scores are uploaded anywhere; everything stays on your own phone. Online rooms are only reachable
 with the room code / link you share.

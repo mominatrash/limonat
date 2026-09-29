@@ -71,9 +71,6 @@ VR.CONFIG = {
   LEMONADE: { need: 5, duration: 10, extend: 2 },
   LEMON_CHANCE: 0.42,         // chance a (non-safe) chunk holds a lemon
 
-  // ---------- Online leaderboard (optional) ----------
-  // Create a free Supabase project, run the SQL from README.md, then paste
-  // the project URL and the "anon public" key here.
 
   // ---------- Camera ----------
   CAMERA_HEIGHT: 4.3,

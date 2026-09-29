@@ -185,7 +185,6 @@
       UI.bind('storyBtn', () => this.S.story.open());
       UI.bind('petsBtn', () => this.S.pets.open());
       UI.bind('standBtn', () => this.S.stand.open());
-      UI.bind('boardBtn', () => this.S.board.open());
       UI.bind('missionsDone', () => this.setState('menu'));
       UI.bind('charBtn', () => { this.charIndex = VR.CHARACTERS.findIndex(c => c.id === this.selectedId); this.setState('character'); });
       UI.bind('charPrev', () => this.cycleChar(-1));

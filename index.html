@@ -106,7 +106,7 @@
   .menu-row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
   .menu-modes { display: flex; gap: 10px; justify-content: center; width: min(460px, 100%); }
   .menu-modes .btn { flex: 1; font-size: 18px; min-height: 50px; padding: 10px 14px; }
-  .menu-tiles { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; width: min(460px, 100%); }
+  .menu-tiles { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; width: min(460px, 100%); }
   .tile { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 9px 2px 8px; border-radius: 16px; border: 1px solid var(--edge);
     background: var(--glass); color: var(--text); font: inherit; font-weight: 700; font-size: 12.5px; cursor: pointer; backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
     box-shadow: 0 4px 0 rgba(0,0,0,.3); transition: transform .12s; white-space: nowrap; }
@@ -385,7 +385,6 @@
       <button class="tile" id="petsBtn"><svg><use href="#i-paw"/></svg><span data-i18n="pets">الحيوانات</span></button>
       <button class="tile" id="standBtn"><svg><use href="#i-stand"/></svg><span data-i18n="stand">البسطة</span><i class="dot" id="standDot" hidden></i></button>
       <button class="tile" id="missionsBtn"><svg><use href="#i-target"/></svg><span data-i18n="missions">المهام</span></button>
-      <button class="tile" id="boardBtn"><svg><use href="#i-trophy"/></svg><span data-i18n="board">المتصدرين</span></button>
     </div>
     <p class="hint" data-i18n-html="controls"></p>
   </div>
@@ -529,7 +528,6 @@
 <script src="js/story.js"></script>
 <script src="js/events.js"></script>
 <script src="js/daily.js"></script>
-<script src="js/board.js"></script>
 <script src="js/party.js"></script>
 <script src="js/game.js"></script>
 </body>
