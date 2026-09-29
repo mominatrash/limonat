@@ -111,30 +111,15 @@ existing progress carries over.
 | Story mode | `story.js` | 8 seeded levels, dialogue, finish line, 3 stars |
 | Seasonal events | `events.js` | Olive harvest (Oct–Nov), Ramadan, winter; Settings -> Season to preview |
 | Daily challenge + ghost | `daily.js` | Same seed for everyone; share link `#c=seed.score.name.data` |
-| Leaderboard | `board.js` | Friends tab offline; global/today tabs with Supabase |
+| Leaderboard | `board.js` | Private: only you + friends you played with (links / online); nothing uploaded |
 
 Every feature is a *system* (`VR.SYSTEMS`) with optional hooks:
 `bind, runStart(opts), update(dt), chunk(chunk, plan), runEnd(summary), reset, leaveRun,
 state(s), menuUpdate(dt), menuCam(state), powerUp(type), absorbCrash(obstacle), warm(on), shift(dz)`.
 `game.start({ mode, seed, biomes, styles, forks, weather, thief, lemonMul })` starts any kind of run.
 
-### Online leaderboard (optional, free)
-1. Create a project at supabase.com.
-2. SQL editor -> run:
-```sql
-create table scores (
-  id bigint generated always as identity primary key,
-  name text not null check (char_length(name) <= 16),
-  score integer not null check (score >= 0 and score < 100000000),
-  dist integer not null default 0,
-  mode text not null default 'endless',
-  day integer not null default 0,
-  created_at timestamptz default now()
-);
-alter table scores enable row level security;
-create policy "anyone can read"   on scores for select using (true);
-create policy "anyone can insert" on scores for insert with check (true);
-```
-3. Project settings -> API: copy the Project URL and the `anon` public key into
-   `CONFIG.LEADERBOARD` in `js/config.js`. Scores are sent when a player has a name
-   (set on the Daily challenge screen).
+### Privacy
+There is no public leaderboard and no scores are uploaded anywhere. The board only lists
+you and friends you actually played with (a challenge link you opened, or an online
+race / co-op round), and it lives on your own phone. Online rooms are only reachable
+with the room code / link you share.

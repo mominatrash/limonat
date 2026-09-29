@@ -74,7 +74,6 @@ VR.CONFIG = {
   // ---------- Online leaderboard (optional) ----------
   // Create a free Supabase project, run the SQL from README.md, then paste
   // the project URL and the "anon public" key here.
-  LEADERBOARD: { url: '', key: '' },
 
   // ---------- Camera ----------
   CAMERA_HEIGHT: 4.3,

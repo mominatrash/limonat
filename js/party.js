@@ -831,6 +831,7 @@
       this.rescue = null; this.inRun = false;
       this.hudEl.hidden = true; this.emoEl.hidden = true; this.arrowEl.hidden = true;
       const my = Math.floor(this.myScore), fr = Math.floor(this.fScore);
+      if (g.S.board && this.fr && this.fr.name) g.S.board.addFriend(this.fr.name, fr);   // your private friends board
       let icon, title, reward;
       if (coop) { icon = '🤝'; title = UI.t('ptTeam'); reward = 60; }
       else if (my > fr || this.frGone) { icon = '🏆'; title = UI.t('ptWin'); reward = 120; }
