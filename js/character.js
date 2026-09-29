@@ -60,7 +60,7 @@
     { id: 'sunset', name: 'غروب', nameEn: 'Sunset', tagline: 'بلون آخر النهار', taglineEn: 'Colours of dusk', price: 4000,
       palette: Object.assign({}, HERO, { shirt: 0xff7a45, shorts: 0x5a2d82, cap: 0xffd23f, shoe: 0xffd23f, sole: 0x5a2d82, detail: 0xd9542a, acc1: 0x5a2d82 }),
       scarf: [0xffd23f, 0xff7a45], acc: ['glasses'], perk: { ar: 'الانطلاق والعملات المضاعفة ‎+50%', en: 'Boost & 2x Coins last +50%' }, perkMul: { boost: 1.5, double: 1.5 } },
-    { id: 'tulip', name: 'توليب', nameEn: 'Tulip', tagline: 'من حقول الربيع', taglineEn: 'From the spring fields', price: 5000,
+    { id: 'tulip', name: 'توليب', nameEn: 'Tulip', tagline: 'من حقول الربيع', taglineEn: 'From the spring fields', price: 2500,
       palette: Object.assign({}, HERO, { shirt: 0xffe1ec, shorts: 0x2f8a45, cap: 0x2a6b3f, hair: 0xfafaf8, shoe: 0xff7fb0, sole: 0x2f8a45, detail: 0xe86fa0 }),
       acc: ['tulips'], perk: { ar: 'الدراجة والعربة تدوم ‎+60%', en: 'Bike & mine cart last +60%' }, perkMul: { bike: 1.6, minecart: 1.6 } },
     { id: 'astro', name: 'رائد فضاء', nameEn: 'Astro', tagline: 'وُلد ليطير', taglineEn: 'Born to fly', price: 6000,
