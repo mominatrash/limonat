@@ -151,7 +151,7 @@
         ptLeave: 'اطلع', ptYou: 'إنت', ptFriend: 'صاحبك', ptJoined: 'دخل صاحبك', ptLeft: 'صاحبك طلع من الغرفة', ptLost: 'انقطع الاتصال مع صاحبك',
         ptErrRoom: 'ما لقينا غرفة بهالكود، تأكد منه', ptErrNet: 'ما قدرنا نوصل لصاحبك. جرّبوا واي فاي أو غيّروا الشبكة', ptErrSrv: 'في مشكلة بالإنترنت أو بسيرفر الربط، جرّب كمان شوي', ptErrOld: 'هالمتصفح ما بيدعم اللعب مع صاحب', ptFull: 'الغرفة مليانة',
         ptCopied: 'تم نسخ الرابط!', ptShareText: 'تعال العب معي ليمونات! كود الغرفة:',
-        ptFell: 'وقعت!', ptWatching: 'عم تتفرج على {n}', ptStillRun: 'وقعت… خلينا نشوف إذا بيسبقك', ptCanSave: 'صاحبك بيقدر يرجّعك!', ptSaveHow: 'لازم يجمع {n} ليمونات خلال {s} ثانية',
+        ptFell: 'وقعت!', ptWatching: 'عم تتفرج على {n}', ptBehind: 'وراك', ptAhead: 'قدامك', ptStillRun: 'وقعت… خلينا نشوف إذا بيسبقك', ptCanSave: 'صاحبك بيقدر يرجّعك!', ptSaveHow: 'لازم يجمع {n} ليمونات خلال {s} ثانية',
         ptNoSave: 'ما لحق يرجّعك… استنى لآخر الجولة', ptFriendFell: 'وقع صاحبك!', ptSaveHim: 'اجمع {n} 🍋 خلال {s} ث عشان ترجّعه', ptSaved: 'رجّعت صاحبك! 💪', ptSavedMe: 'صاحبك رجّعك! 💪', ptTooLate: 'ما لحقت ترجّعه 😢', ptBack: 'رجع صاحبك للجولة',
         ptWin: 'فزت! 🏆', ptLose: 'صاحبك فاز هالمرة', ptTie: 'تعادل!', ptTeam: 'نتيجة الفريق', ptTeamS: 'الفريق', ptAgain: 'جولة ثانية', ptReward: 'مكافأة', ptFrReady: 'صاحبك جاهز لجولة ثانية',
       }, {
@@ -162,7 +162,7 @@
         ptLeave: 'Leave', ptYou: 'You', ptFriend: 'Friend', ptJoined: 'Your friend joined', ptLeft: 'Your friend left the room', ptLost: 'Lost the connection to your friend',
         ptErrRoom: 'No room with that code — check it', ptErrNet: "Couldn't reach your friend. Try Wi-Fi or another network", ptErrSrv: 'Internet or matchmaking server problem, try again soon', ptErrOld: "This browser can't play with a friend", ptFull: 'The room is full',
         ptCopied: 'Link copied!', ptShareText: 'Come play Limonat with me! Room code:',
-        ptFell: 'You fell!', ptWatching: 'Watching {n}', ptStillRun: 'You fell… will they beat you?', ptCanSave: 'Your friend can bring you back!', ptSaveHow: 'They need {n} lemons within {s} seconds',
+        ptFell: 'You fell!', ptWatching: 'Watching {n}', ptBehind: 'behind you', ptAhead: 'ahead', ptStillRun: 'You fell… will they beat you?', ptCanSave: 'Your friend can bring you back!', ptSaveHow: 'They need {n} lemons within {s} seconds',
         ptNoSave: "They didn't make it… wait for the end of the round", ptFriendFell: 'Your friend fell!', ptSaveHim: 'Grab {n} 🍋 in {s}s to bring them back', ptSaved: 'You saved your friend! 💪', ptSavedMe: 'Your friend saved you! 💪', ptTooLate: 'Too late to save them 😢', ptBack: 'Your friend is back in the run',
         ptWin: 'You win! 🏆', ptLose: 'Your friend won this time', ptTie: "It's a tie!", ptTeam: 'Team score', ptTeamS: 'Team', ptAgain: 'Play again', ptReward: 'Reward', ptFrReady: 'Your friend is ready for another round',
       });
@@ -212,6 +212,7 @@
       // HUD: friend chip + emoji reactions
       const hud = document.getElementById('hud');
       this.hudEl = add(`<div id="ptHud" hidden><div class="pt-chip glass" id="ptChip"></div></div>`, hud);
+      this.arrowEl = add(`<div id="ptArrow" class="glass" hidden></div>`, hud);
       const side = hud.querySelector('.hud-side');
       this.emoEl = add(`<div class="pt-emo" id="ptEmo" hidden><div class="pt-emo-row" id="ptEmoRow" hidden>${EMO.map(e => `<button data-e="${e}">${e}</button>`).join('')}</div><button class="btn icon pt-emo-btn" id="ptEmoBtn" aria-label="Emoji">😀</button></div>`, side);
       // menu button
@@ -249,6 +250,8 @@
         .pt-res span.s{direction:ltr;color:var(--lemon);font-variant-numeric:tabular-nums}.pt-res small{display:block;color:var(--muted);font-weight:600;font-size:12px}
         #ptHud{position:absolute;top:calc(10px + var(--safe-t));left:50%;transform:translateX(-50%);pointer-events:none;display:flex;justify-content:center;max-width:46vw}
         #ptHud[hidden]{display:none}
+        #ptArrow{position:absolute;bottom:calc(22px + var(--safe-b, 0px));left:50%;transform:translateX(-50%);padding:6px 14px;border-radius:999px;font-weight:800;font-size:14px;white-space:nowrap;direction:rtl;color:#fff;pointer-events:none;animation:pulse 1.4s ease-in-out infinite}
+        #ptArrow[hidden]{display:none}
         .pt-chip{padding:6px 12px;border-radius:999px;font-weight:800;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:rtl;color:#fff}
         .pt-chip.up{box-shadow:inset 0 0 0 2px #ff8b7d}.pt-chip.down{box-shadow:inset 0 0 0 2px #58d27a}.pt-chip.sos{box-shadow:inset 0 0 0 2px var(--lemon);animation:pulse 1s ease-in-out infinite}
         .pt-emo{display:flex;align-items:center;gap:6px;pointer-events:auto}.pt-emo[hidden]{display:none}
@@ -489,7 +492,7 @@
         case 'noSave': this.saveInfo = null; this.noSave = true; if (g.state === 'partyWait') this.renderWait(); break;
         case 'revive': this.revived(); break;
         case 'alive':
-          this.fDead = false; this.buf = [];
+          this.fDead = false; this.buf = []; this.dS = null;
           UI.toast(UI.t('ptBack'), 1300, true);
           break;
         case 'bye':
@@ -502,12 +505,12 @@
     runStart(opts) {
       this.clearAvatar();
       this.inRun = opts.mode === 'party' && !!this.fr;
-      this.hudEl.hidden = !this.inRun; this.emoEl.hidden = !this.inRun;
+      this.hudEl.hidden = !this.inRun; this.emoEl.hidden = !this.inRun; this.arrowEl.hidden = true;
       if (!this.inRun) return;
       this.mode = opts.party === 'coop' ? 'coop' : 'race';
       this.meDead = false; this.fDead = false; this.frGone = false;
       this.fScore = 0; this.fDist = 0; this.myScore = 0; this.myDist = 0;
-      this.buf = []; this.off = null; this.taken = []; this.takeT = 0; this.sendT = 0; this.chipT = 0; this.rescue = null; this.rescues = 0; this.myRescued = 0; this.saveInfo = null; this.noSave = false;
+      this.buf = []; this.off = null; this.dS = null; this.taken = []; this.takeT = 0; this.sendT = 0; this.chipT = 0; this.rescue = null; this.rescues = 0; this.myRescued = 0; this.saveInfo = null; this.noSave = false;
       this.g.canContinue = false;
       this.buildAvatar();
     }
@@ -521,10 +524,18 @@
       tag.position.y = 2.4; rig.root.add(tag);
       rig.root.visible = false;
       this.g.scene.add(rig.root);
-      this.av = { rig, tag, pose: A.pose(), phase: 0, d: 0, x: 0, y: 0, f: 0 };
+      const meshes = [];
+      rig.root.traverse(o => { if (o.isMesh) meshes.push({ m: o, mat: o.material, outline: o.material === VR.charMaterials.outlineMat }); });
+      const ghostMat = new T.MeshBasicMaterial({ color: this.mode === 'coop' ? 0xa8ffc0 : 0xffe89a, transparent: true, opacity: 0.45, depthWrite: false, fog: false });
+      this.av = { rig, tag, meshes, ghostMat, ghost: false, pose: A.pose(), phase: 0 };
+    }
+    setGhost(av, on) {
+      av.ghost = on;
+      for (const e of av.meshes) { if (e.outline) e.m.visible = !on; else e.m.material = on ? av.ghostMat : e.mat; }
     }
     clearAvatar() {
       if (this.av) {
+        this.av.ghostMat.dispose();
         this.g.scene.remove(this.av.rig.root);
         this.av.tag.material.map.dispose(); this.av.tag.material.dispose();
         this.av = null;
@@ -536,7 +547,7 @@
       this.setMeHidden(false); this.spec = false;
       if (this.inRun && !this.meDead) this.send({ t: 'dead', score: Math.floor(this.g.score), dist: Math.floor(this.g.distance), quit: 1 });
       this.inRun = false; this.clearAvatar();
-      this.hudEl.hidden = true; this.emoEl.hidden = true;
+      this.hudEl.hidden = true; this.emoEl.hidden = true; this.arrowEl.hidden = true;
     }
     // where the friend is right now (buffered a little so the motion is smooth)
     sample() {
@@ -557,6 +568,26 @@
       }
       return { d: b.d, x: b.x, y: b.y, f: b.f };
     }
+    // Where the friend is NOW. Samples arrive a little late (network + the small
+    // buffer that keeps the motion smooth); at 13-31 m/s that is 2-4 m, so the
+    // distance is pushed forward by his measured speed × that delay. Sideways
+    // position and pose stay on the smooth buffered sample.
+    friendNow(dt) {
+      const s = !this.fDead && this.sample(); if (!s) { this.dS = null; return null; }
+      const B = this.buf, last = B[B.length - 1], now = performance.now() / 1000;
+      let j = B.length - 1; while (j > 0 && last.t - B[j - 1].t < 0.3) j--;
+      const o = B[Math.max(0, j - 1)];
+      const v = last.t - o.t > 0.05 ? Math.max(0, Math.min(45, (last.d - o.d) / (last.t - o.t))) : this.g.speedAt(last.d);
+      const oneWay = Math.min(0.25, (this.rtt || 80) / 2000);
+      const dNow = last.d + v * Math.max(0, Math.min(0.5, now - last.t + oneWay));   // no guessing past half a second of silence
+      if (this.dS == null || Math.abs(dNow - this.dS) > 6) { this.dS = dNow; this.lastNow = now; }
+      else {
+        const rdt = Math.min(0.25, Math.max(0, now - (this.lastNow || now)));   // real time: slow frames don't make him lag
+        this.dS += v * rdt; this.dS += (dNow - this.dS) * Math.min(1, rdt * 6);
+      }
+      this.lastNow = now;
+      return { d: this.dS, x: s.x, y: s.y, f: s.f };
+    }
     update(dt) {
       if (!this.inRun) return;
       const g = this.g, p = g.player;
@@ -574,20 +605,33 @@
         else if ((this.rescue.sent -= dt) <= 0) { this.rescue.sent = 1; this.send({ t: 'resc', got: this.rescue.got, need: this.rescue.need, left: Math.ceil(this.rescue.t) }); }
       }
       // the friend's runner
-      const s = !this.fDead && this.sample();
+      const s = this.friendNow(dt);
       this.drawFriend(dt, s);
       this.takeItems(dt);
       this.updateFloats(dt);
       // HUD chip (5x a second)
-      if ((this.chipT -= dt) <= 0) { this.chipT = 0.2; this.renderChip(s); }
+      if ((this.chipT -= dt) <= 0) { this.chipT = 0.2; this.renderChip(s); this.renderArrow(s); }
+    }
+    // friend out of sight (behind the camera, or far ahead): a small pointer at the screen edge
+    renderArrow(s) {
+      const el = this.arrowEl; if (!el) return;
+      const rel = s ? s.d - this.g.distance : 0, m = UI.t('m') || 'm';
+      const off = !!s && (rel <= -7.2 || rel >= 140);
+      el.hidden = !off;
+      if (off) el.textContent = rel < 0 ? `⬇ ${this.frName} ${UI.t('ptBehind')} ${Math.round(-rel)}${m}` : `⬆ ${this.frName} ${UI.t('ptAhead')} ${Math.round(rel)}${m}`;
     }
     drawFriend(dt, s) {
       const g = this.g, p = g.player, av = this.av;
       if (av) {
         const rel = s ? s.d - g.distance : 0;
-        const show = !!s && rel > -2.2 && rel < 140;
+        // visible as long as the camera can see him (it sits ~7.6 m behind you)
+        const show = !!s && rel > -7.2 && rel < 140;
         av.rig.root.visible = show;
         if (show) {
+          // between the camera and you: a see-through silhouette so he never blocks the road
+          const ghost = rel < -1;
+          if (ghost !== av.ghost) this.setGhost(av, ghost);
+          if (ghost) av.ghostMat.opacity = 0.42 - Math.min(1, (-1 - rel) / 5.5) * 0.22;
           av.rig.root.position.set(s.x, s.y, p.z - rel);
           av.phase = (av.phase + dt * (1.32 + g.speed * 0.036)) % 1;
           const pose = av.pose;
@@ -597,8 +641,7 @@
           else if (s.y > 0.25) A.lerp(pose, pose, A.P.jumpFall, 0.8);
           A.apply(av.rig, pose);
           if (!(s.f & 1) && s.y <= 0.25) A.plant(av.rig, 1, 0);
-          // fade the name tag when very close so it doesn't cover the road
-          av.tag.material.opacity = Math.min(1, Math.max(0.35, (rel + 2) / 8));
+          av.tag.material.opacity = ghost ? 0.45 : 0.95;
         }
       }
     }
@@ -635,7 +678,7 @@
     spectate(dt) {
       const g = this.g, p = g.player;
       if (!this.inRun) return;
-      const s = !this.fDead && this.sample();
+      const s = this.friendNow(dt);
       g.fxDesat += (0 - g.fxDesat) * Math.min(1, dt * 2);
       if (s) {
         const dm = s.d - g.distance;
@@ -786,7 +829,7 @@
     finish() {
       const g = this.g, coop = this.mode === 'coop';
       this.rescue = null; this.inRun = false;
-      this.hudEl.hidden = true; this.emoEl.hidden = true;
+      this.hudEl.hidden = true; this.emoEl.hidden = true; this.arrowEl.hidden = true;
       const my = Math.floor(this.myScore), fr = Math.floor(this.fScore);
       let icon, title, reward;
       if (coop) { icon = '🤝'; title = UI.t('ptTeam'); reward = 60; }
