@@ -25,7 +25,7 @@
     spawn(x, y, z, chunk) {
       const i = this.free.pop();
       if (i === undefined) return -1;
-      this.items[i] = { x, y, z, chunk, magnet: false };
+      this.items[i] = { x, y, z, x0: x, y0: y, z0: z, chunk, magnet: false };
       this.active.add(i);
       return i;
     }
@@ -149,6 +149,9 @@
   });
   VR.keepAlpha(glowMat);
 
+  // tell the game's systems which item was taken (online play mirrors it on the friend's phone)
+  const picked = (game, kind, item) => { if (game && game.emit) game.emit('picked', kind, item); };
+
   class Collectibles {
     constructor(scene, fx) {
       this.scene = scene;
@@ -201,7 +204,7 @@
       this.powerups.length = 0;
     }
     shift(dz) {
-      for (const set of [this.coins, this.gems]) for (const i of set.active) set.items[i].z += dz;
+      for (const set of [this.coins, this.gems]) for (const i of set.active) { const it = set.items[i]; it.z += dz; it.z0 += dz; }
       for (const p of this.powerups) { p.z += dz; p.obj.position.z = p.z; }
     }
     // a helper (pet) picks up coins / lemons within r metres of (x, y, z)
@@ -210,13 +213,35 @@
       for (const i of this.coins.active) {
         const c = this.coins.items[i];
         const dx = c.x - x, dy = c.y - y, dz = c.z - z;
-        if (dx * dx + dy * dy + dz * dz < r2) { game.onCoin(1, c.x, c.y, c.z); this.coins.kill(i); }
+        if (dx * dx + dy * dy + dz * dz < r2) { game.onCoin(1, c.x, c.y, c.z); picked(game, 'c', c); this.coins.kill(i); }
       }
       for (const i of this.gems.active) {
         const c = this.gems.items[i];
         const dx = c.x - x, dy = c.y - y, dz = c.z - z;
-        if (dx * dx + dy * dy + dz * dz < r2) { game.onGem(c.x, c.y, c.z); this.gems.kill(i); }
+        if (dx * dx + dy * dy + dz * dz < r2) { game.onGem(c.x, c.y, c.z); picked(game, 'g', c); this.gems.kill(i); }
       }
+    }
+    // somebody else (a friend playing the same railway) took the item that was
+    // spawned at (x0, y0, z0): remove it here too. Returns true when found.
+    takeAt(kind, x, y, z, type) {
+      if (kind === 'p') {
+        for (let k = 0; k < this.powerups.length; k++) {
+          const p = this.powerups[k];
+          if (p.type === type && Math.abs(p.x - x) < 0.4 && Math.abs(p.y - y) < 0.5 && Math.abs(p.z - z) < 0.8) {
+            this.burst(p.x, p.y, p.z, 0xffffff); this.pool.release(p.obj); this.powerups.splice(k, 1); return true;
+          }
+        }
+        return false;
+      }
+      const set = kind === 'g' ? this.gems : this.coins;
+      for (const i of set.active) {
+        const c = set.items[i];
+        if (Math.abs(c.x0 - x) < 0.3 && Math.abs(c.y0 - y) < 0.4 && Math.abs(c.z0 - z) < 0.6) {
+          if (this.fx) this.fx.sparkle(c.x, c.y, c.z, kind === 'g' ? 0xfff07a : 0xffd84a, 3, 1.6);
+          set.kill(i); return true;
+        }
+      }
+      return false;
     }
     // remove the coin sitting at (x, y, z) (an event item takes its place)
     removeCoinAt(x, y, z) {
@@ -256,7 +281,7 @@
           c.x += (px - c.x) * k; c.y += (py - c.y) * k; c.z += (pz - c.z) * k;
         }
         if (live && Math.abs(c.z - pz) < 0.7 && Math.abs(c.x - px) < 0.75 && c.y > player.y - 0.3 && c.y < player.y + player.height + 0.3 * reach) {
-          game.onCoin(1, c.x, c.y, c.z);
+          game.onCoin(1, c.x, c.y, c.z); picked(game, 'c', c);
           coins.kill(i);
           continue;
         }
@@ -273,7 +298,7 @@
         if (magnet && Math.abs(g.z - pz) < C.MAGNET_RADIUS) g.magnet = true;
         if (g.magnet) { const k = Math.min(1, dt * 12); g.x += (px - g.x) * k; g.y += (py - g.y) * k; g.z += (pz - g.z) * k; }
         if (live && Math.abs(g.z - pz) < 0.8 && Math.abs(g.x - px) < 0.85 && g.y > player.y - 0.3 && g.y < player.y + player.height + 0.4) {
-          game.onGem(g.x, g.y, g.z); this.gems.kill(i); continue;
+          game.onGem(g.x, g.y, g.z); picked(game, 'g', g); this.gems.kill(i); continue;
         }
         e.set(Math.sin(this.time * 2 + g.z) * 0.3, -this.time * 2, 0.3); q.setFromEuler(e);
         const sc = 1 + Math.sin(this.time * 6) * 0.06; s.set(sc, sc, sc);
@@ -292,7 +317,7 @@
         ring.rotation.x = this.time * 1.7; ring.rotation.y = this.time * 1.1;
         p.obj.position.y = p.y + Math.sin(this.time * 3 + p.z) * 0.15;
         if (live && Math.abs(p.z - pz) < 0.9 && Math.abs(p.x - px) < 0.95 && p.y > player.y - 0.5 && p.y < player.y + player.height + 0.5) {
-          game.onPowerUp(p.type, p.x, p.y, p.z);
+          game.onPowerUp(p.type, p.x, p.y, p.z); picked(game, 'p', p);
           this.pool.release(p.obj); this.powerups.splice(k, 1);
         }
       }

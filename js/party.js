@@ -141,7 +141,7 @@
       this.name = 'party'; this.g = game;
       this.net = null; this.role = null; this.code = ''; this.mode = 'race';
       this.meReady = false; this.fr = null; this.rtt = 0;
-      this.inRun = false; this.av = null; this.buf = []; this.floats = [];
+      this.inRun = false; this.av = null; this.buf = []; this.floats = []; this.taken = [];
       this.pendingCode = (/[#&]room=([A-Za-z0-9]{4,6})/.exec(location.hash) || [])[1] || null;
       UI.addStrings({
         party: 'مع صاحب', ptTitle: 'العب مع صاحبك', ptHost: 'اعمل غرفة', ptJoin: 'ادخل', ptCodePh: 'كود الغرفة', ptOr: 'أو عندك كود؟',
@@ -474,6 +474,9 @@
           if (g.state === 'partyWait') this.renderWait();
           break;
         case 'emo': if (EMO.includes(m.e)) this.floatEmo(m.e, false); break;
+        case 'pk':           // the friend took a coin / lemon / power-up: it disappears here too
+          if (this.inRun && this.taken.length < 600) { this.taken.push({ k: m.k, x: m.x, y: m.y, d: m.d, ty: m.ty }); this.takeT = 0; }
+          break;
         case 'lemon': if (this.inRun && this.mode === 'coop' && !this.meDead && g.state === 'playing') g.meterLemon(); break;
         case 'dead': this.onFriendDead(m); break;
         case 'resc': this.saveInfo = { got: m.got, need: m.need, left: m.left }; if (g.state === 'partyWait') this.renderWait(); break;
@@ -498,7 +501,7 @@
       this.mode = opts.party === 'coop' ? 'coop' : 'race';
       this.meDead = false; this.fDead = false; this.frGone = false;
       this.fScore = 0; this.fDist = 0; this.myScore = 0; this.myDist = 0;
-      this.buf = []; this.off = null; this.sendT = 0; this.chipT = 0; this.rescue = null; this.rescues = 0; this.myRescued = 0; this.saveInfo = null; this.noSave = false;
+      this.buf = []; this.off = null; this.taken = []; this.takeT = 0; this.sendT = 0; this.chipT = 0; this.rescue = null; this.rescues = 0; this.myRescued = 0; this.saveInfo = null; this.noSave = false;
       this.g.canContinue = false;
       this.buildAvatar();
     }
@@ -583,6 +586,15 @@
           av.tag.material.opacity = Math.min(1, Math.max(0.35, (rel + 2) / 8));
         }
       }
+      // items the friend took: remove them once they exist in my world, forget them once passed
+      if (this.taken.length && (this.takeT -= dt) <= 0) {
+        this.takeT = 0.15;
+        const col = g.collect;
+        this.taken = this.taken.filter(it => {
+          if (it.d < g.distance - 4) return false;
+          return !col.takeAt(it.k, it.x, it.y, p.z - (it.d - g.distance), it.ty);
+        });
+      }
       // floating emojis
       for (let i = this.floats.length - 1; i >= 0; i--) {
         const e = this.floats[i]; e.t += dt;
@@ -618,6 +630,13 @@
       sp.position.set(0, y0, 0); holder.add(sp);
       this.floats.push({ sp, t: 0, y0 });
       VR.Audio.play('pop');
+    }
+    // I took an item: tell the friend where it was spawned (in railway distance, same on both phones)
+    picked(kind, item) {
+      if (!this.inRun || this.meDead || !this.linked) return;
+      const g = this.g, z = item.z0 != null ? item.z0 : item.z;
+      const r = (v) => Math.round(v * 100) / 100;
+      this.send({ t: 'pk', k: kind, x: r(item.x0 != null ? item.x0 : item.x), y: r(item.y0 != null ? item.y0 : item.y), d: r(g.distance + (g.player.z - z)), ty: item.type });
     }
     lemon() {
       if (!this.inRun || this.meDead) return;
