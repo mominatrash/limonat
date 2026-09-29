@@ -321,6 +321,8 @@
     { id: 'thief',    kind: 'sum', stat: 'thieves',    ar: 'امسك حرامي الليمون {n} مرات',    en: 'Catch the lemon thief {n} times', tiers: [1, 3, 8, 15] },
     { id: 'forks',    kind: 'sum', stat: 'forks',      ar: 'اختار طريقك بـ {n} مفترقات',      en: 'Take {n} junctions',          tiers: [2, 6, 15, 30] },
     { id: 'rides',    kind: 'sum', stat: 'rides',      ar: 'اركب مركبة {n} مرات',            en: 'Ride a vehicle {n} times',    tiers: [1, 4, 10, 20] },
+    { id: 'enemies',  kind: 'sum', stat: 'enemies',    ar: 'وقّع {n} من جماعة زهران',        en: 'Knock out {n} of Zahran’s gang', tiers: [3, 10, 25, 60] },
+    { id: 'bosses',   kind: 'sum', stat: 'bosses',     ar: 'اهزم الدرون الكبير {n} مرات',      en: 'Beat the mega-drone {n} times', tiers: [1, 3, 8, 15] },
   ];
   const BY_ID = Object.fromEntries(DEFS.map(d => [d.id, d]));
   const reward = (d, tier) => Math.round((60 + tier * 90) * (d.kind === 'run' ? 1.2 : 1) / 10) * 10;
@@ -330,7 +332,7 @@
       const saved = UI.store.get('missions', null);
       this.tiers = (saved && saved.tiers) || {};         // id -> next tier index
       this.active = ((saved && saved.active) || []).filter(m => BY_ID[m.id] && BY_ID[m.id].tiers[m.tier] !== undefined);
-      this.life = Object.assign({ runs: 0, dist: 0, coins: 0, jumps: 0, slides: 0, lemons: 0, lemonade: 0, powerups: 0, jetpacks: 0, closeCalls: 0, bestDist: 0, thieves: 0, forks: 0, rides: 0, weather: 0 },
+      this.life = Object.assign({ runs: 0, dist: 0, coins: 0, jumps: 0, slides: 0, lemons: 0, lemonade: 0, powerups: 0, jetpacks: 0, closeCalls: 0, bestDist: 0, thieves: 0, forks: 0, rides: 0, weather: 0, enemies: 0, bosses: 0 },
         UI.store.get('lifetime', {}));
       while (this.active.length < 3) this.active.push(this.pick());
       this.onComplete = null;        // (mission, reward) => void

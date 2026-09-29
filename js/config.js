@@ -59,9 +59,10 @@ VR.CONFIG = {
     sneakers:    { duration: 12, label: 'Super Sneakers', jumpFactor: 1.4 },
     minecart:    { duration: 14, label: 'Mine cart' },
     bike:        { duration: 14, label: 'Bicycle' },
+    box:         { duration: 0,  label: 'Mystery box' },   // combat.js: rolls an item into your slot (placed by combat, never by patterns)
   },
   // how often each power-up appears (relative)
-  POWERUP_WEIGHTS: { magnet: 1, shield: 1, boost: 0.8, double: 1, invincible: 0.7, jetpack: 0.8, sneakers: 0.9, minecart: 0.6, bike: 0.6 },
+  POWERUP_WEIGHTS: { magnet: 1, shield: 1, boost: 0.8, double: 1, invincible: 0.7, jetpack: 0.8, sneakers: 0.9, minecart: 0.6, bike: 0.6, box: 0 },
   MAGNET_RADIUS: 6,
 
   // ---------- Lemons -> Lemonade ----------

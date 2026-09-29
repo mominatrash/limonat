@@ -480,6 +480,7 @@
         .boss-bar span{font-weight:900;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,.6);font-size:14px}.boss-bar em{font-style:normal}
         .boss-bar i{display:block;width:100%;height:12px;border-radius:99px;background:rgba(0,0,0,.45);overflow:hidden;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
         .boss-bar i b{display:block;height:100%;width:0;background:linear-gradient(90deg,#ffd23f,#ff5a36);transition:width .12s}
+        @media (max-width:560px){.boss-bar{bottom:calc(112px + var(--safe-b, 0px))}}
         .boss-bar.hot i{animation:bossHot .35s ease-in-out infinite alternate}@keyframes bossHot{to{box-shadow:0 0 0 3px #ff5a36,0 0 16px #ff5a36}}`;
       document.head.appendChild(st);
       UI.bind('storyBack', () => this.g.setState('menu'));

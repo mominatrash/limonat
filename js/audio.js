@@ -108,6 +108,7 @@
     closeCall: ['event', 400, 2], stumble: ['event', 300, 2], crash: ['event', 800, 3], shieldBreak: ['event', 300, 3],
     catch: ['event', 600, 3], newBest: ['event', 1000, 3], fanfare: ['event', 1200, 3], buy: ['ui', 200, 2], denied: ['ui', 200, 1],
     click: ['ui', 60, 0], tick: ['ui', 150, 1], whoosh: ['move', 250, 1], pop: ['world', 180, 1],
+    throw: ['move', 90, 1], hit: ['event', 60, 1], boom: ['event', 150, 2], splat: ['event', 150, 2], zap: ['event', 300, 3], buzz: ['world', 700, 1], engine: ['world', 700, 1], whistle: ['event', 400, 2], slip: ['event', 300, 2], mirror: ['event', 300, 2], swap: ['event', 400, 3],
     trainHorn: ['world', 2600, 1], thunder: ['world', 3000, 2], baa: ['world', 900, 1], meow: ['world', 400, 1], chirp: ['world', 400, 1],
   };
   const last = {}; let hushUntil = 0, lastBig = -1e9, curPan = 0;
@@ -168,6 +169,17 @@
     thunder() { noise(2.0, { f: 700, fTo: 80, vol: 0.4, attack: 0.03, bus: B }); tone(45, 1.6, { slide: 30, vol: 0.14, bus: B }); },
     baa(o) { tone(410, 0.45, { type: 'triangle', vol: 0.06, lp: 1500, vib: 8, slide: 370, pan: o && o.pan, bus: B }); },
     meow() { tone(700, 0.32, { type: 'triangle', slide: 900, vol: 0.05, vib: 6, bus: B }); },
+    throw() { noise(0.12, { ft: 'bandpass', f: 900, fTo: 2600, q: 1, vol: 0.1, bus: B }); tone(600, 0.08, { type: 'triangle', slide: 900, vol: 0.04, bus: B }); },
+    hit(o) { noise(0.12, { ft: 'bandpass', f: 1800, fTo: 500, q: 1.2, vol: 0.12, pan: o && o.pan, bus: B }); tone(900, 0.06, { type: 'square', vol: 0.025, slide: 500, bus: B }); },
+    boom(o) { noise(0.5, { f: 900, fTo: 90, vol: 0.28, pan: o && o.pan, bus: B }); tone(90, 0.4, { slide: 40, vol: 0.18, bus: B }); },
+    splat(o) { noise(0.28, { f: 1400, fTo: 220, q: 2, vol: 0.2, pan: o && o.pan, bus: B }); tone(180, 0.18, { type: 'triangle', slide: 90, vol: 0.06, bus: B }); },
+    zap() { tone(220, 0.35, { type: 'sawtooth', slide: 1800, vol: 0.06, lp: 3000, bus: B }); tone(1800, 0.4, { type: 'sine', slide: 200, vol: 0.05, when: 0.08, bus: B }); noise(0.3, { ft: 'highpass', f: 3000, vol: 0.05, bus: B }); },
+    buzz(o) { tone(160, 0.7, { type: 'sawtooth', vol: 0.03, lp: 900, vib: 24, pan: o && o.pan, bus: B }); tone(240, 0.7, { type: 'square', vol: 0.012, lp: 1200, vib: 30, pan: o && o.pan, bus: B }); },
+    engine(o) { tone(70, 0.9, { type: 'sawtooth', slide: 150, vol: 0.06, lp: 700, vib: 16, pan: o && o.pan, bus: B }); noise(0.6, { f: 500, vol: 0.05, pan: o && o.pan, bus: B }); },
+    whistle() { tone(1900, 0.18, { vol: 0.06, slide: 2400, bus: B }); tone(2400, 0.35, { vol: 0.06, when: 0.2, vib: 10, bus: B }); },
+    slip() { tone(700, 0.45, { type: 'triangle', slide: 160, vol: 0.07, bus: B }); noise(0.2, { f: 2000, vol: 0.05, bus: B }); },
+    mirror() { for (let i = 0; i < 4; i++) tone(1568 * Math.pow(2, i * 3 / 12), 0.25, { vol: 0.035, when: i * 0.05, bus: B }); },
+    swap() { tone(300, 0.5, { type: 'sawtooth', slide: 1200, vol: 0.05, lp: 2500, bus: B }); tone(1200, 0.5, { type: 'sawtooth', slide: 300, vol: 0.05, lp: 2500, bus: B }); },
     chirp() { for (let i = 0; i < 3; i++) tone(2600 + i * 300, 0.07, { vol: 0.035, slide: 3400, when: i * 0.08, bus: B }); },
   };
 

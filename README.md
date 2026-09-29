@@ -117,10 +117,11 @@ existing progress carries over.
 | Story mode | `story.js` | «سرّ البيّارة»: 4 chapters × 4 seeded levels, comic panels, radio calls, 16 hidden letters + true ending, bulldozer / drone bosses, goat ally, 3 stars |
 | Seasonal events | `events.js` | Olive harvest (Oct–Nov), Ramadan, winter; Settings -> Season to preview |
 | Daily challenge + ghost | `daily.js` | Same seed for everyone; share link `#c=seed.score.name.data` |
+| Combat | `combat.js` | Mystery boxes 🎁 roll one item (slingshot, lemonade slick, Mishmish whistle, magnet pulse, dash; race only: juice bomb, banana peel, swap, mirror). Use with the round button, a tap, or E/F/Enter. Zahran's drones and bikers (seeded per chunk), mega-drone boss with shared HP in co-op |
 
 Every feature is a *system* (`VR.SYSTEMS`) with optional hooks:
 `bind, runStart(opts), update(dt), chunk(chunk, plan), runEnd(summary), reset, leaveRun,
-state(s), menuUpdate(dt), menuCam(state), powerUp(type), absorbCrash(obstacle), warm(on), shift(dz)`.
+state(s), menuUpdate(dt), menuCam(state), powerUp(type), pickPowerUp(type, x, y, z), absorbCrash(obstacle), warm(on), shift(dz), combatNet(msg)`.
 `game.start({ mode, seed, biomes, styles, forks, weather, thief, lemonMul })` starts any kind of run.
 
 ### Privacy

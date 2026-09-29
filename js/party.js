@@ -611,6 +611,7 @@
         case 'bye':
           if (this.net) { if (this.role === 'host') this.net.dropConn(); else this.net.close(); }
           this.onClose(); break;
+        case 'cb': g.emit('combatNet', m); break;        // combat items / co-op boss (combat.js)
       }
     }
 

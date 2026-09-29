@@ -111,7 +111,7 @@
     // broadcast an event to every feature system that implements it
     emit(ev, a, b, c) { if (!this.sys) return; for (const s of this.sys) if (s[ev]) s[ev](a, b, c); }
     // first system that answers wins (e.g. a vehicle absorbing a crash)
-    ask(ev, a, b) { if (!this.sys) return false; for (const s of this.sys) if (s[ev] && s[ev](a, b)) return true; return false; }
+    ask(ev, a, b, c, d) { if (!this.sys) return false; for (const s of this.sys) if (s[ev] && s[ev](a, b, c, d)) return true; return false; }
 
     // shifts the picture on screen without moving the camera (menu framing)
     applyViewOffset() {
@@ -595,6 +595,7 @@
       UI.toast(UI.t('pu').lemonade, 1500, true);
     }
     onPowerUp(type, x, y, z) {
+      if (this.ask('pickPowerUp', type, x, y, z)) return;     // e.g. the combat item box
       this.powerups.activate(type);
       this.missions.bump('powerups');
       if (type === 'jetpack') { if (this.S.vehicles) this.S.vehicles.dismount('quiet'); this.startJetpack(); }

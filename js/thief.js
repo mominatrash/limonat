@@ -81,6 +81,8 @@
     return root;
   }
 
+  VR.buildGoat = buildGoat;
+
   class Thief {
     constructor(game) {
       this.name = 'thief'; this.g = game;
