@@ -67,7 +67,7 @@
     let node = osc;
     if (o.lp) { const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.frequency.setValueAtTime(o.lp, t); if (o.lpTo) f.frequency.exponentialRampToValueAtTime(o.lpTo, t + dur); f.Q.value = o.q || 0.7; node.connect(f); node = f; }
     if (o.vib) { const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = o.vib; lg.gain.value = freq * 0.012; l.connect(lg); lg.connect(osc.frequency); l.start(t); l.stop(t + dur + 0.05); }
-    node.connect(g); g.connect(out(o.bus || sfxBus, o.pan));
+    node.connect(g); g.connect(out(o.bus || sfxBus, o.pan ?? curPan));
     osc.start(t); osc.stop(t + dur + 0.05);
   }
   let noiseBuf = null;
@@ -91,51 +91,86 @@
     g.gain.setValueAtTime(0.0001, t);
     g.gain.exponentialRampToValueAtTime(v, t + (o.attack ?? 0.003));
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
-    s.connect(f); f.connect(g); g.connect(out(o.bus || sfxBus, o.pan));
+    s.connect(f); f.connect(g); g.connect(out(o.bus || sfxBus, o.pan ?? curPan));
     s.start(t, Math.random() * 0.5); s.stop(t + dur + 0.05);
+  }
+
+  // ------------------------------------------------------------ MIX
+  // Every sound belongs to a group with its own level, a minimum gap (so a
+  // burst of 20 coins doesn't turn into noise) and a priority. A big moment
+  // (power-up, catch, crash…) briefly ducks the music and swallows small
+  // pickup sounds for a beat, so one clear sound is heard at a time.
+  const GROUP = { move: 0.5, pickup: 0.62, event: 0.9, world: 0.75, ui: 0.55 };
+  const RULES = {
+    step: ['move', 90, 0], jump: ['move', 90, 1], land: ['move', 120, 1], slide: ['move', 200, 1], lane: ['move', 60, 0],
+    coin: ['pickup', 38, 0], gem: ['pickup', 110, 1],
+    powerup: ['event', 250, 3], lemonade: ['event', 400, 3], jetStart: ['event', 400, 3], boing: ['event', 200, 2], ding: ['event', 250, 2],
+    closeCall: ['event', 400, 2], stumble: ['event', 300, 2], crash: ['event', 800, 3], shieldBreak: ['event', 300, 3],
+    catch: ['event', 600, 3], newBest: ['event', 1000, 3], fanfare: ['event', 1200, 3], buy: ['ui', 200, 2], denied: ['ui', 200, 1],
+    click: ['ui', 60, 0], tick: ['ui', 150, 1], whoosh: ['move', 250, 1], pop: ['world', 180, 1],
+    trainHorn: ['world', 2600, 1], thunder: ['world', 3000, 2], baa: ['world', 900, 1], meow: ['world', 400, 1], chirp: ['world', 400, 1],
+  };
+  const last = {}; let hushUntil = 0, lastBig = -1e9, curPan = 0;
+  const groups = {};
+  function groupBus(name) {
+    if (!groups[name]) { const g = ctx.createGain(); g.gain.value = GROUP[name] ?? 0.7; g.connect(sfxBus); groups[name] = g; }
+    return groups[name];
+  }
+  function duck(amount, time) {
+    if (!musicBus || !settings.music) return;
+    const t = ctx.currentTime, base = MUSIC_VOL * musicLevel;
+    musicBus.gain.cancelScheduledValues(t);
+    musicBus.gain.setTargetAtTime(base * (1 - amount), t, 0.03);
+    musicBus.gain.setTargetAtTime(base, t + time, 0.25);
   }
 
   // ------------------------------------------------------------ sound effects
   let coinStep = 0, coinTime = 0, stepAlt = 0, jet = null, amb = null;
   const PENTA = [0, 2, 4, 7, 9, 12, 14, 16, 19, 21, 24];
+  let B = null;                                    // the bus the current sound plays on
   const SYNTH = {
-    step() { stepAlt ^= 1; noise(0.05, { f: stepAlt ? 900 : 700, vol: 0.05, pan: stepAlt ? 0.15 : -0.15 }); },
-    jump() { noise(0.22, { ft: 'bandpass', f: 500, fTo: 2200, q: 1.2, vol: 0.18 }); tone(280, 0.16, { type: 'triangle', slide: 520, vol: 0.07 }); },
-    land() { tone(110, 0.14, { slide: 50, vol: 0.28 }); noise(0.1, { f: 420, vol: 0.18 }); },
-    slide() { noise(0.45, { ft: 'bandpass', f: 1800, fTo: 500, q: 0.9, vol: 0.16 }); },
-    lane(o) { noise(0.12, { ft: 'highpass', f: 1500, fTo: 4000, vol: 0.09, pan: o && o.pan }); },
+    // movement: soft and low so it never competes with the music
+    step() { stepAlt ^= 1; noise(0.06, { f: stepAlt ? 380 : 320, vol: 0.05, pan: stepAlt ? 0.12 : -0.12, bus: B }); },
+    jump() { noise(0.2, { ft: 'bandpass', f: 500, fTo: 1600, q: 0.9, vol: 0.12, bus: B }); tone(330, 0.14, { type: 'triangle', slide: 520, vol: 0.045, bus: B }); },
+    land() { tone(95, 0.16, { slide: 55, vol: 0.22, bus: B }); noise(0.08, { f: 350, vol: 0.1, bus: B }); },
+    slide() { noise(0.4, { ft: 'bandpass', f: 1300, fTo: 450, q: 0.7, vol: 0.1, bus: B }); },
+    lane(o) { noise(0.1, { ft: 'bandpass', f: 1800, fTo: 3200, q: 0.8, vol: 0.06, pan: o && o.pan, bus: B }); },
+    whoosh() { noise(0.35, { ft: 'bandpass', f: 600, fTo: 1800, q: 0.8, vol: 0.1, bus: B }); },
+    // pickups: bell-like, climbing a pentatonic scale on a streak
     coin() {
       const now = ctx.currentTime;
-      coinStep = now - coinTime < 0.4 ? Math.min(coinStep + 1, PENTA.length - 1) : 0;
+      coinStep = now - coinTime < 0.35 ? (coinStep + 1) % PENTA.length : 0;
       coinTime = now;
-      const f = 1046 * Math.pow(2, PENTA[coinStep] / 12);
-      tone(f, 0.22, { vol: 0.09 }); tone(f * 2.76, 0.12, { vol: 0.025 }); tone(f * 1.5, 0.18, { vol: 0.04, when: 0.045 });
+      const f = 1175 * Math.pow(2, PENTA[coinStep] / 12);
+      tone(f, 0.16, { vol: 0.06, bus: B }); tone(f * 2, 0.08, { vol: 0.012, when: 0.01, bus: B });
     },
-    gem() { [0, 4, 7, 12, 16].forEach((s, i) => { tone(784 * Math.pow(2, s / 12), 0.35, { type: 'triangle', vol: 0.1, when: i * 0.05 }); tone(784 * 2.76 * Math.pow(2, s / 12), 0.15, { vol: 0.02, when: i * 0.05 }); }); },
-    powerup() { [0, 4, 7, 12, 16, 19, 24].forEach((s, i) => tone(392 * Math.pow(2, s / 12), 0.2, { type: 'square', vol: 0.05, lp: 3000, when: i * 0.045 })); noise(0.5, { ft: 'highpass', f: 5000, vol: 0.05, attack: 0.2 }); },
-    shieldBreak() { noise(0.45, { ft: 'highpass', f: 3000, vol: 0.25 }); for (let i = 0; i < 4; i++) tone(1400 - i * 230, 0.3, { type: 'triangle', vol: 0.06, when: i * 0.03, slide: 300 }); },
-    stumble() { tone(160, 0.22, { type: 'sawtooth', slide: 70, vol: 0.13, lp: 900 }); noise(0.15, { f: 800, vol: 0.2 }); tone(420, 0.25, { slide: 260, vol: 0.06, when: 0.06, vib: 18 }); },
-    crash() { noise(0.8, { f: 1200, fTo: 200, vol: 0.5 }); tone(150, 0.7, { type: 'sawtooth', slide: 38, vol: 0.22, lp: 800 }); tone(180, 0.5, { type: 'square', vol: 0.06, lp: 2400, q: 8 }); },
-    click() { tone(660, 0.07, { vol: 0.07, slide: 880 }); },
-    tick() { tone(1200, 0.04, { vol: 0.04 }); },
-    trainHorn() {
-      for (const f of [311, 370, 466]) tone(f, 1.0, { type: 'sawtooth', vol: 0.035, lp: 1600, attack: 0.05, vib: 5 });
-    },
-    closeCall() { noise(0.35, { ft: 'bandpass', f: 3500, fTo: 400, q: 1.5, vol: 0.2 }); tone(1318, 0.2, { vol: 0.05, when: 0.12 }); tone(1760, 0.3, { vol: 0.05, when: 0.18 }); },
-    newBest() { [0, 4, 7, 12, 7, 12, 16].forEach((s, i) => tone(523 * Math.pow(2, s / 12), 0.28, { type: 'triangle', vol: 0.1, when: i * 0.1 })); },
-    buy() { for (let i = 0; i < 6; i++) tone(1318 * Math.pow(2, (i % 3) * 4 / 12), 0.12, { vol: 0.06, when: i * 0.05 }); },
-    denied() { tone(220, 0.15, { type: 'square', vol: 0.05, lp: 900 }); tone(180, 0.2, { type: 'square', vol: 0.05, lp: 900, when: 0.1 }); },
-    jetStart() { noise(0.7, { ft: 'bandpass', f: 300, fTo: 2400, q: 0.7, vol: 0.3, attack: 0.05 }); tone(90, 0.6, { type: 'sawtooth', slide: 240, vol: 0.12, lp: 900 }); },
-    thunder() { noise(2.2, { f: 900, fTo: 90, vol: 0.55, attack: 0.02 }); tone(48, 1.8, { type: 'sawtooth', slide: 30, vol: 0.18, lp: 160, when: 0.05 }); noise(0.25, { ft: 'highpass', f: 2500, vol: 0.2 }); },
-    baa() { tone(420, 0.5, { type: 'sawtooth', vol: 0.07, lp: 1400, vib: 9, slide: 380 }); tone(840, 0.45, { type: 'triangle', vol: 0.03, vib: 9 }); },
-    catch() { [0, 4, 7, 12].forEach((s, i) => tone(660 * Math.pow(2, s / 12), 0.25, { type: 'square', vol: 0.05, lp: 3200, when: i * 0.06 })); noise(0.3, { ft: 'bandpass', f: 1800, vol: 0.12 }); },
-    meow() { tone(700, 0.35, { type: 'triangle', slide: 900, vol: 0.06, vib: 6 }); tone(1000, 0.25, { type: 'sine', slide: 600, vol: 0.04, when: 0.15 }); },
-    chirp() { for (let i = 0; i < 3; i++) tone(2600 + i * 300, 0.07, { vol: 0.04, slide: 3400, when: i * 0.08 }); },
-    ding() { tone(1568, 0.5, { type: 'sine', vol: 0.08 }); tone(2349, 0.4, { type: 'sine', vol: 0.04, when: 0.08 }); },
-    fanfare() { [0, 4, 7, 12, 16, 19, 24].forEach((s, i) => tone(523 * Math.pow(2, s / 12), 0.35, { type: 'triangle', vol: 0.09, when: i * 0.09 })); },
-    boing() { tone(220, 0.28, { type: 'triangle', slide: 880, vol: 0.12 }); tone(440, 0.2, { type: 'sine', slide: 1320, vol: 0.05, when: 0.03 }); },
-    whoosh() { noise(0.3, { ft: 'bandpass', f: 800, fTo: 2500, q: 1, vol: 0.12 }); },
+    gem() { [0, 4, 7].forEach((s, i) => tone(880 * Math.pow(2, s / 12), 0.28, { type: 'triangle', vol: 0.07, when: i * 0.055, bus: B })); },
+    // events: one clear, musical sound each
+    powerup() { [0, 4, 7, 12].forEach((s, i) => tone(523 * Math.pow(2, s / 12), 0.22, { type: 'triangle', vol: 0.08, when: i * 0.06, bus: B })); noise(0.4, { ft: 'highpass', f: 5500, vol: 0.035, attack: 0.15, bus: B }); },
+    lemonade() { noise(0.6, { ft: 'highpass', f: 4200, vol: 0.06, attack: 0.05, bus: B }); [0, 4, 7, 11, 14].forEach((s, i) => tone(660 * Math.pow(2, s / 12), 0.3, { type: 'triangle', vol: 0.065, when: 0.05 + i * 0.07, bus: B })); },
+    jetStart() { noise(0.9, { ft: 'lowpass', f: 250, fTo: 1400, q: 0.6, vol: 0.18, attack: 0.08, bus: B }); tone(70, 0.8, { slide: 140, vol: 0.12, attack: 0.1, bus: B }); },
+    boing() { tone(260, 0.26, { type: 'triangle', slide: 700, vol: 0.09, bus: B }); },
+    ding() { tone(1568, 0.45, { vol: 0.06, bus: B }); tone(2349, 0.3, { vol: 0.025, when: 0.07, bus: B }); },
+    closeCall() { noise(0.3, { ft: 'bandpass', f: 2600, fTo: 600, q: 1.2, vol: 0.12, bus: B }); tone(1318, 0.18, { type: 'triangle', vol: 0.045, when: 0.1, bus: B }); tone(1760, 0.25, { type: 'triangle', vol: 0.045, when: 0.17, bus: B }); },
+    stumble() { tone(220, 0.22, { slide: 110, vol: 0.12, bus: B }); noise(0.12, { f: 600, vol: 0.12, bus: B }); },
+    crash() { noise(0.7, { f: 900, fTo: 150, vol: 0.38, bus: B }); tone(120, 0.6, { slide: 40, vol: 0.2, bus: B }); },
+    shieldBreak() { for (let i = 0; i < 4; i++) tone(1900 - i * 260, 0.25, { type: 'triangle', vol: 0.035, when: i * 0.035, bus: B }); noise(0.25, { ft: 'highpass', f: 3500, vol: 0.1, bus: B }); },
+    catch() { [0, 4, 7, 12, 16].forEach((s, i) => tone(587 * Math.pow(2, s / 12), 0.22, { type: 'triangle', vol: 0.075, when: i * 0.06, bus: B })); },
+    newBest() { [0, 4, 7, 12, 7, 12, 16].forEach((s, i) => tone(523 * Math.pow(2, s / 12), 0.26, { type: 'triangle', vol: 0.08, when: i * 0.1, bus: B })); },
+    fanfare() { [0, 4, 7, 12, 16, 19, 24].forEach((s, i) => tone(523 * Math.pow(2, s / 12), 0.32, { type: 'triangle', vol: 0.075, when: i * 0.09, bus: B })); },
+    buy() { for (let i = 0; i < 5; i++) tone(1318 * Math.pow(2, (i % 3) * 4 / 12), 0.12, { vol: 0.05, when: i * 0.05, bus: B }); },
+    denied() { tone(262, 0.12, { type: 'triangle', vol: 0.06, bus: B }); tone(220, 0.16, { type: 'triangle', vol: 0.06, when: 0.1, bus: B }); },
+    click() { tone(880, 0.05, { vol: 0.045, slide: 1100, bus: B }); },
+    tick() { tone(1250, 0.05, { vol: 0.05, bus: B }); tone(2500, 0.02, { vol: 0.01, bus: B }); },
+    pop() { noise(0.18, { ft: 'bandpass', f: 1400, fTo: 300, q: 0.8, vol: 0.09, bus: B }); },
+    // world: placed in the stereo field where they happen
+    trainHorn(o) { for (const [f, d] of [[370, 0], [466, 0.02]]) tone(f, 0.75, { type: 'triangle', vol: 0.045, lp: 1200, attack: 0.06, vib: 4, when: d, pan: o && o.pan, bus: B }); },
+    thunder() { noise(2.0, { f: 700, fTo: 80, vol: 0.4, attack: 0.03, bus: B }); tone(45, 1.6, { slide: 30, vol: 0.14, bus: B }); },
+    baa(o) { tone(410, 0.45, { type: 'triangle', vol: 0.06, lp: 1500, vib: 8, slide: 370, pan: o && o.pan, bus: B }); },
+    meow() { tone(700, 0.32, { type: 'triangle', slide: 900, vol: 0.05, vib: 6, bus: B }); },
+    chirp() { for (let i = 0; i < 3; i++) tone(2600 + i * 300, 0.07, { vol: 0.035, slide: 3400, when: i * 0.08, bus: B }); },
   };
+
 
   // ------------------------------------------------------------ music
   const D2 = 73.42;
@@ -197,10 +232,22 @@
     unlock() { ensure(); if (ctx && ctx.state === 'suspended') ctx.resume(); },
     play(name, opts) {
       if (!ensure() || !settings.sfx) return;
-      if (files[name]) { const s = ctx.createBufferSource(); s.buffer = files[name]; s.connect(sfxBus); s.start(); }
-      else if (SYNTH[name]) SYNTH[name](opts);
+      const R = RULES[name] || ['event', 0, 1], now = ctx.currentTime * 1000;
+      if (now - (last[name] ?? -1e9) < R[1]) return;          // too soon after the same sound
+      if (R[2] === 0 && now - lastBig < 220) return;           // small sounds give way to a big moment
+      if (R[0] === 'pickup' && now < hushUntil) return;        // a celebration is playing: no pickup chatter on top
+      if (R[2] >= 3 && name !== 'crash' && now - lastBig < 300) return; // one big sound at a time
+      last[name] = now;
+      if (R[2] >= 3) { lastBig = now; duck(0.45, 0.6); }
+      B = groupBus(R[0]); curPan = Math.max(-0.8, Math.min(0.8, (opts && opts.pan) || 0));
+      try {
+        if (files[name]) { const s = ctx.createBufferSource(); s.buffer = files[name]; s.connect(out(B, curPan)); s.start(); }
+        else if (SYNTH[name]) SYNTH[name](opts);
+      } finally { B = null; curPan = 0; }
     },
-    setMode(m) { mode = m; },
+    // swallow pickup sounds for a moment (used when a single event also hands out lemons/coins)
+    hush(ms) { if (ctx) hushUntil = Math.max(hushUntil, ctx.currentTime * 1000 + ms); },
+    setMode(m) { mode = m; if (musicBus && settings.music) musicBus.gain.setTargetAtTime(MUSIC_VOL * musicLevel * (m === 'game' ? 0.85 : 1), ctx.currentTime, 0.3); },
     // looping ambience for weather: 'rain' | 'wind' | null
     ambience(kind) {
       if (!ensure()) return;
@@ -210,35 +257,36 @@
       const src = ctx.createBufferSource(); src.buffer = getNoise(); src.loop = true;
       const f = ctx.createBiquadFilter(); f.type = kind === 'rain' ? 'highpass' : 'bandpass';
       f.frequency.value = kind === 'rain' ? 1400 : 420; f.Q.value = kind === 'rain' ? 0.4 : 0.8;
-      const g = ctx.createGain(); g.gain.value = 0.0001; g.gain.setTargetAtTime(kind === 'rain' ? 0.12 : 0.16, ctx.currentTime, 0.8);
+      const g = ctx.createGain(); g.gain.value = 0.0001; g.gain.setTargetAtTime(kind === 'rain' ? 0.075 : 0.09, ctx.currentTime, 0.8);
       if (kind === 'wind') { const l = ctx.createOscillator(), lg = ctx.createGain(); l.frequency.value = 0.23; lg.gain.value = 260; l.connect(lg); lg.connect(f.frequency); l.start(); }
-      src.connect(f); f.connect(g); g.connect(sfxBus); src.start();
+      src.connect(f); f.connect(g); g.connect(groupBus('world')); src.start();
       amb = { kind, src, g };
     },
-    // continuous jetpack roar (filtered noise + low rumble, with flutter)
+    // continuous jetpack sound: a warm filtered air rush + soft low hum,
+    // the flutter moves the filter (not the volume) so it never pulses
     jet(on) {
       if (!ensure()) return;
       if (on && !jet && settings.sfx) {
         const t = ctx.currentTime;
         const src = ctx.createBufferSource(); src.buffer = getNoise(); src.loop = true;
-        const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 520; bp.Q.value = 0.55;
-        const hs = ctx.createBiquadFilter(); hs.type = 'highshelf'; hs.frequency.value = 3000; hs.gain.value = -8;
-        const rum = ctx.createOscillator(); rum.type = 'sawtooth'; rum.frequency.value = 52;
-        const rlp = ctx.createBiquadFilter(); rlp.type = 'lowpass'; rlp.frequency.value = 180;
-        const rg = ctx.createGain(); rg.gain.value = 0.35;
-        const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.2, t + 0.35);
-        const lfo = ctx.createOscillator(); lfo.frequency.value = 11; const lg = ctx.createGain(); lg.gain.value = 0.035;
-        lfo.connect(lg); lg.connect(g.gain);
-        src.connect(bp); bp.connect(hs); hs.connect(g);
-        rum.connect(rlp); rlp.connect(rg); rg.connect(g);
-        g.connect(sfxBus);
-        src.start(); rum.start(); lfo.start();
-        jet = { g, stop: [src, rum, lfo] };
+        const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 900; lp.Q.value = 0.4;
+        const hp = ctx.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 140;
+        const hum = ctx.createOscillator(); hum.type = 'sine'; hum.frequency.value = 62;
+        const hg = ctx.createGain(); hg.gain.value = 0.25;
+        const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.085, t + 0.6);
+        const lfo = ctx.createOscillator(); lfo.frequency.value = 3.2; const lg = ctx.createGain(); lg.gain.value = 180;
+        lfo.connect(lg); lg.connect(lp.frequency);
+        src.connect(hp); hp.connect(lp); lp.connect(g); hum.connect(hg); hg.connect(g);
+        g.connect(groupBus('world'));
+        src.start(); hum.start(); lfo.start();
+        jet = { g, stop: [src, hum, lfo] };
+        if (musicBus && settings.music) musicBus.gain.setTargetAtTime(MUSIC_VOL * musicLevel * 0.8, t, 0.4);
       } else if (!on && jet) {
         const j = jet; jet = null; const t = ctx.currentTime;
         j.g.gain.cancelScheduledValues(t); j.g.gain.setValueAtTime(Math.max(0.0001, j.g.gain.value), t);
-        j.g.gain.exponentialRampToValueAtTime(0.0001, t + 0.4);
-        for (const n of j.stop) n.stop(t + 0.45);
+        j.g.gain.exponentialRampToValueAtTime(0.0001, t + 0.5);
+        for (const n of j.stop) n.stop(t + 0.55);
+        if (musicBus && settings.music) musicBus.gain.setTargetAtTime(MUSIC_VOL * musicLevel, t, 0.4);
       }
     },
     startMusic() {

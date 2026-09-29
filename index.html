@@ -8,6 +8,11 @@
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ليمونات">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+<link rel="manifest" href="manifest.webmanifest">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Baloo+Bhaijaan+2:wght@500;600;700;800&display=swap">
@@ -174,9 +179,12 @@
   .setting { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 10px 14px; border-radius: 16px; background: var(--glass-2); border: 1px solid var(--edge); }
   .setting > span { font-size: 18px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
   .setting > span svg { width: 22px; height: 22px; opacity: .85; }
+  .setting .st { display: flex; flex-direction: column; line-height: 1.15; } .setting .st small { font-size: 12px; font-weight: 500; color: var(--muted); }
   .seg { display: inline-flex; background: rgba(0,0,0,.3); border-radius: 12px; padding: 3px; gap: 2px; direction: inherit; }
   .seg button { border: 0; background: transparent; color: var(--muted); font-weight: 700; font-size: 15px; padding: 6px 12px; border-radius: 9px; cursor: pointer; }
   .seg button[aria-pressed="true"] { background: var(--lemon); color: #3a2a00; }
+  .setting { flex-wrap: wrap; } .setting > .seg { flex-shrink: 1; min-width: 0; max-width: 100%; }
+  @media (max-width: 520px) { .setting:has(> .seg) > .seg { flex: 1 1 100%; justify-content: space-between; } .setting:has(> .seg) > .seg button { flex: 1; padding: 6px 6px; } }
   .switch { width: 58px; height: 32px; border-radius: 99px; border: 0; background: rgba(255,255,255,.18); position: relative; cursor: pointer; transition: background .2s; flex: none; }
   .switch::after { content: ''; position: absolute; top: 4px; inset-inline-start: 4px; width: 24px; height: 24px; border-radius: 50%; background: #fff; transition: transform .2s; box-shadow: 0 2px 6px rgba(0,0,0,.3); }
   .switch[aria-pressed="true"] { background: var(--leaf); }
@@ -413,6 +421,7 @@
     <div class="setting"><span><svg><use href="#i-eye"/></svg><b data-i18n="graphics">الرسوميات</b></span>
       <div class="seg" id="optQuality"><button data-q="high" data-i18n="qHigh">عالية</button><button data-q="medium" data-i18n="qMed">متوسطة</button><button data-q="low" data-i18n="qLow">منخفضة</button></div></div>
     <div class="setting"><span><svg><use href="#i-gauge"/></svg><b data-i18n="fps">عرض FPS</b></span><button class="switch" id="optFps" aria-pressed="false" aria-label="FPS"></button></div>
+    <div class="setting"><span><svg><use href="#i-gauge"/></svg><span class="st"><b data-i18n="drs">ثبات 60 فريم</b><small data-i18n="drsHint">يخفّف الدقة شوي وقت الضغط</small></span></span><button class="switch" id="optDrs" aria-pressed="false" aria-label="60 FPS"></button></div>
     <div class="setting"><span><svg><use href="#i-globe"/></svg><b data-i18n="language">اللغة</b></span>
       <div class="seg" id="optLang"><button data-l="ar">العربية</button><button data-l="en">English</button></div></div>
     <button class="btn green" id="settingsDone"><svg><use href="#i-check"/></svg><span data-i18n="done">تم</span></button>

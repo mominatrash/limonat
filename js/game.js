@@ -25,7 +25,7 @@
     constructor() {
       this.state = 'loading';
       const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-      this.settings = Object.assign({ sfx: true, music: true, quality: coarse ? 'medium' : 'high', fps: false }, UI.store.get('settings', {}));
+      this.settings = Object.assign({ sfx: true, music: true, quality: coarse ? 'medium' : 'high', fps: false, drs: false }, UI.store.get('settings', {}));
       if (!QUALITY[this.settings.quality]) this.settings.quality = 'medium';
       this.best = UI.store.get('best', 0);
       this.bank = UI.store.get('bank', 0);
@@ -160,6 +160,8 @@
       UI.setSwitch('optSfx', s.sfx);
       UI.setSwitch('optMusic', s.music);
       UI.setSwitch('optFps', s.fps);
+      UI.setSwitch('optDrs', s.drs);
+      if (!s.drs) { this.drsScale = 1; this.drsRun = 1; }
       UI.setQuality(s.quality);
       UI.fps(s.fps);
       this.resize();
@@ -215,6 +217,7 @@
       document.querySelectorAll('#optQuality button').forEach(b => b.addEventListener('click', () => { VR.Audio.play('click'); this.settings.quality = b.dataset.q; this.applySettings(); }));
       document.querySelectorAll('#optLang button').forEach(b => b.addEventListener('click', () => { VR.Audio.play('click'); UI.setLang(b.dataset.l); }));
       UI.bind('optFps', () => { this.settings.fps = !this.settings.fps; this.applySettings(); });
+      UI.bind('optDrs', () => { this.settings.drs = !this.settings.drs; this.autoDowngraded = false; this.applySettings(); });
       VR.Input.onPause(() => { if (this.state === 'playing') this.pause(); else if (this.state === 'paused') this.resume(); });
       document.addEventListener('visibilitychange', () => { if (document.hidden && this.state === 'playing') this.pause(); });
       // menu: Enter / Space starts a run
@@ -504,7 +507,7 @@
       this.coins += n * dbl;
       if (this.coinBonus) { this.coinFrac += n * dbl * this.coinBonus; const x = Math.floor(this.coinFrac); this.coins += x; this.coinFrac -= x; }
       this.score += C.COIN_POINTS * n * dbl * this.multiplier;
-      VR.Audio.play('coin');
+      VR.Audio.play('coin', { pan: (x - this.player.x) / 5 });
       this.fx.sparkle(x, y, z, 0xffd84a, 4, 2.2, -this.speed * 0.95);
       UI.bumpCoins();
     }
@@ -565,7 +568,7 @@
       this.lemonsRun++; this.missions.bump('lemons'); this.emit('lemon');
       this.score += C.GEM_POINTS * this.multiplier;
       this.fx.sparkle(x, y, z, 0xfff07a, 18, 4.5, -this.speed * 0.9);
-      VR.Audio.play('gem');
+      if (pu.active('lemonade') || this.lemons + 1 < this.lemonNeed) VR.Audio.play('gem', { pan: (x - this.player.x) / 5 });
       const [sx, sy] = this.screenPos(x, y + 0.6, z);
       UI.popupLemon(sx, sy);
       if (pu.active('lemonade')) {               // during a rush: stretch it
@@ -585,7 +588,7 @@
       this.fx.ring(p.x, p.y + 1, p.z, 0xffe14a, 28, 7);
       this.fx.sparkle(p.x, p.y + 1.2, p.z, 0xffe14a, 30, 5, -this.speed * 0.8);
       this.fxFlash = 0.4;
-      VR.Audio.play('powerup'); VR.Audio.play('gem');
+      VR.Audio.play('lemonade');
       UI.toast(UI.t('pu').lemonade, 1500, true);
     }
     onPowerUp(type, x, y, z) {
@@ -597,10 +600,11 @@
       this.score += C.POWERUP_POINTS * this.multiplier;
       this.fx.sparkle(x, y, z, VR.POWERUP_COLORS[type], 24, 6, -this.speed * 0.9);
       this.fxFlash = 0.35;
-      VR.Audio.play('powerup');
+      // each ride / jet / sneakers has its own signature sound — no generic chime on top
+      if (type !== 'jetpack' && type !== 'sneakers' && type !== 'minecart' && type !== 'bike') VR.Audio.play('powerup');
       UI.toast(UI.t('pu')[type], 1100, true);
     }
-    onTrainApproach() { VR.Audio.play('trainHorn'); }
+    onTrainApproach(o) { VR.Audio.play('trainHorn', { pan: o ? (o.x - this.player.x) / 5 : 0 }); }
     onWallBump() { this.cameraImpulse(0.05); this.shake = Math.max(this.shake, 0.08); }
     cameraImpulse(v) { this.camBumpV += v * 6; }
     onStep(side, x, y, z) {
@@ -675,7 +679,7 @@
     // (never below 62%). As soon as there is headroom again it climbs back to
     // full resolution. Nothing else about the picture changes.
     updateDRS(ms) {
-      if (this.state !== 'playing' || document.hidden || ms > 250) { this.drsAcc = 0; this.drsN = 0; return; }
+      if (!this.settings.drs || this.state !== 'playing' || document.hidden || ms > 250) { this.drsAcc = 0; this.drsN = 0; return; }
       this.drsAcc = (this.drsAcc || 0) + ms; this.drsN = (this.drsN || 0) + 1;
       if (this.drsAcc < 600) return;
       const avg = this.drsAcc / this.drsN, s = this.drsScale || 1;
@@ -721,7 +725,7 @@
         if (this.fpsAcc > 0.5) { UI.fps(true, Math.round(this.fpsFrames / this.fpsAcc) + ((this.drsScale || 1) < 1 ? ' · ' + Math.round((this.drsScale || 1) * 100) + '%' : '')); this.fpsAcc = 0; this.fpsFrames = 0; }
       }
       // last resort only: dynamic resolution is already at its floor and it's still < 26 fps
-      if (this.state === 'playing' && !this.autoDowngraded && (this.drsScale || 1) <= DRS_MIN + 0.001) {
+      if (this.settings.drs && this.state === 'playing' && !this.autoDowngraded && (this.drsScale || 1) <= DRS_MIN + 0.001) {
         this.perfAcc += rawDt; this.perfFrames++;
         if (this.perfAcc > 5) {
           const fps = this.perfFrames / this.perfAcc;

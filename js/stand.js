@@ -162,7 +162,7 @@
     sell() {
       if (this.lemons < 10) { VR.Audio.play('denied'); UI.toast(UI.t('standNoLemons'), 1100); return; }
       this.lemons -= 10; this.g.bank += sellPrice(this.level) * 10; UI.store.set('bank', this.g.bank); this.save();
-      VR.Audio.play('coin'); VR.Audio.play('ding'); this.g.fx.sparkle(POS.x, 1.4, POS.z, 0xfff07a, 20, 3);
+      VR.Audio.play('ding'); this.g.fx.sparkle(POS.x, 1.4, POS.z, 0xfff07a, 20, 3);
       this.g.missions.bump('lemonsSold', 10);
       this.refresh();
     }

@@ -77,7 +77,7 @@
       this.nextLane = 1.6; this.dropAcc = 0; this.escaping = false; this.phase = 0;
       this.goat.visible = true;
       UI.toast(UI.t('thiefAppears'), 1900, true);
-      VR.Audio.play('baa');
+      VR.Audio.play('baa', { pan: (this.x - p.x) / 5 });
     }
     blocked(lane, z0, z1) {
       for (const o of this.g.world.obstacles) {
@@ -139,9 +139,12 @@
       this.active = false; this.goat.visible = false; this.caught++;
       this.nextAt = g.distance + 900 + g.evRnd() * 700; this.forcedAt = null;
       g.coins += reward; g.score += 500 * g.multiplier;
+      VR.Audio.play('catch'); VR.Audio.hush(700);
+      const gx = this.x, pan = (gx - g.player.x) / 5;
+      setTimeout(() => VR.Audio.play('baa', { pan }), 380);
       g.onGem(this.x, this.y + 1, z); g.onGem(this.x, this.y + 1.2, z);
       g.fx.confetti(this.x, this.y + 1.2, z, 60); g.fx.ring(this.x, this.y + 0.8, z, 0xffe14a, 24, 6);
-      VR.Audio.play('catch'); VR.Audio.play('baa'); g.vibrate(40);
+      g.vibrate(40);
       UI.toast(UI.t('thiefCaught') + '  +' + reward, 1900, true);
       g.missions.bump('thieves');
       g.emit('thiefCaught');

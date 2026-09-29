@@ -235,7 +235,7 @@
       const t = this.finT;
       if (t < 1.2) { const v = g.speed * Math.max(0, 1 - t / 1.2); p.z -= v * dt; p.animate(dt, v, g); }
       else { if (!(p.cheer > 0) && (t % 2.4) < dt * 1.5) p.cheer = 1; p.animateIdle(dt, t, 0, 0); p.object.rotation.y = Math.PI; p.object.position.set(p.x, p.y, p.z); }
-      if (this.fireT <= 0) { this.fireT = 0.5; g.fx.ring(p.x + (Math.random() - 0.5) * 8, 6 + Math.random() * 3, p.z - 8 - Math.random() * 6, [0xffd23f, 0xe8433a, 0x3ec1ff, 0x7bc86c][(Math.random() * 4) | 0], 28, 7); VR.Audio.play('tick'); }
+      if (this.fireT <= 0) { this.fireT = 0.5; g.fx.ring(p.x + (Math.random() - 0.5) * 8, 6 + Math.random() * 3, p.z - 8 - Math.random() * 6, [0xffd23f, 0xe8433a, 0x3ec1ff, 0x7bc86c][(Math.random() * 4) | 0], 28, 7); VR.Audio.play('pop', { pan: (Math.random() - 0.5) * 1.2 }); }
       const e = Math.min(1, t / 2.2), k = e * e * (3 - 2 * e);
       const ang = k * Math.PI * 0.85;
       const cam = g.camera.position;
