@@ -24,6 +24,7 @@
       perk: { ar: 'ستايلك الخاص', en: 'Pure style' },
     };
   }
+  VR.makeCustomDef = makeDef;
   // insert the saved design before the game reads the character list
   const saved = UI.store.get('customChar', null);
   if (saved) VR.CHARACTERS.splice(1, 0, makeDef(saved));

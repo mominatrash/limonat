@@ -447,6 +447,7 @@
       this.emit('runEnd', { score: this.score, dist: this.distance, coins: this.coins, isBest });
       clearTimeout(this.goTimer);
       this.goTimer = setTimeout(() => {
+        if (this.ask('gameOverScreen', { score: this.score, dist: this.distance, coins: this.coins, isBest })) return;
         UI.gameOver({ score: this.score, dist: this.distance, coins: this.coins, best: this.best, isBest });
         this.setState('gameover');
         if (isBest) { VR.Audio.play('newBest'); this.fx.confetti(p.x, p.y + 2, p.z, 120); }
@@ -477,7 +478,7 @@
       this.powerups.timers.invincible = Math.max(this.powerups.remaining('invincible'), 3);
       this.hitCooldown = 0.3;
       this.shake = 0; this.timeScale = 1; this.fxDesat = 0; this.fxFlash = 0.8;
-      this.deathCam = null;
+      this.deathCam = null; clearTimeout(this.goTimer);
       this.clock.getDelta();
       this.setState('playing');
       VR.Audio.play('powerup');
@@ -571,14 +572,16 @@
       if (pu.active('lemonade') || this.lemons + 1 < this.lemonNeed) VR.Audio.play('gem', { pan: (x - this.player.x) / 5 });
       const [sx, sy] = this.screenPos(x, y + 0.6, z);
       UI.popupLemon(sx, sy);
-      if (pu.active('lemonade')) {               // during a rush: stretch it
-        pu.timers.lemonade = Math.min(L.duration, pu.remaining('lemonade') + L.extend);
-        return;
-      }
+      this.meterLemon();
+      if (!pu.active('lemonade') && !UI.store.get('lemonTip', false)) { UI.store.set('lemonTip', true); UI.toast(UI.t('lemonTip'), 2200, true); }
+    }
+    // one lemon into the meter (also used for a co-op partner's lemons)
+    meterLemon() {
+      const L = C.LEMONADE, pu = this.powerups;
+      if (pu.active('lemonade')) { pu.timers.lemonade = Math.min(L.duration, pu.remaining('lemonade') + L.extend); return; }
       this.lemons++;
       if (this.lemons >= this.lemonNeed) { this.startLemonade(); return; }
       UI.lemons(this.lemons, this.lemonNeed, 0);
-      if (!UI.store.get('lemonTip', false)) { UI.store.set('lemonTip', true); UI.toast(UI.t('lemonTip'), 2200, true); }
     }
     startLemonade() {
       const p = this.player;
@@ -708,7 +711,7 @@
       this.elapsed = (this.elapsed || 0) + dt;
 
       if (this.state === 'playing') this.updatePlaying(dt);
-      else if (this.state === 'dying' || this.state === 'gameover') this.updateDeath(dt, rawDt);
+      else if (this.state === 'dying' || this.state === 'gameover' || (VR.DEATH_STATES || []).includes(this.state)) this.updateDeath(dt, rawDt);
       else if (this.state === 'levelDone') this.emit('finishUpdate', rawDt);
       else if (this.state === 'menu' || this.state === 'character' || this.state === 'loading' || this.state === 'missions' || (VR.MENU_STATES || []).includes(this.state)) this.updateMenu(rawDt);
       else if (this.state === 'settings' && this.settingsReturn !== 'paused') this.updateMenu(rawDt);
