@@ -19,6 +19,7 @@
     low:    { post: false, shadows: 0,    pr: 1,   chunks: 4, fog: 0.8,  msaa: 0 },
   };
   const TUNNEL_COLOR = new T.Color(0x14120f);
+  const DRS_MIN = 0.62;
 
   class Game {
     constructor() {
@@ -122,7 +123,7 @@
     resize() {
       const holder = document.getElementById('game');
       const w = Math.max(1, holder.clientWidth || window.innerWidth), h = Math.max(1, holder.clientHeight || window.innerHeight);
-      const pr = Math.min(window.devicePixelRatio || 1, this.Q.pr);
+      const pr = Math.min(window.devicePixelRatio || 1, this.Q.pr) * (this.drsScale || 1);
       if (this._size === w + 'x' + h + '@' + pr) return;
       this._size = w + 'x' + h + '@' + pr;
       this.W = w; this.H = h;
@@ -292,6 +293,8 @@
       if (s !== 'playing') UI.tutorial(null);
       if (s === 'menu') { UI.menuStats(this.best, this.bank); VR.Audio.setMode('menu'); }
       if (s === 'character') this.refreshShop();
+      // full resolution on the menus; a run resumes at the level the last run settled on
+      if (s === 'menu' && (this.drsScale || 1) < 1) { this.drsRun = this.drsScale; this.drsScale = 1; this.resize(); }
       this.emit('state', s);
     }
 
@@ -361,6 +364,7 @@
       VR.Audio.unlock();
       this.mode = opts.mode || 'endless';
       this.runOpts = opts;
+      if (this.drsRun && this.drsRun < 1) { this.drsScale = Math.min(1, this.drsRun + 0.08); this.resize(); }
       this.evRnd = opts.seed != null ? VR.rng(opts.seed * 7 + 13) : Math.random;
       // on phones, go full screen when a run starts (tap = user gesture)
       if (window.matchMedia && window.matchMedia('(pointer: coarse)').matches) this.enterFullscreen();
@@ -665,8 +669,34 @@
     }
 
     // ------------------------------------------------------------ loop
+    // ------------------------------------------------------------ dynamic resolution
+    // Holds 60 fps on phones: measures real frame times and, only when a
+    // device falls behind, renders at a slightly lower internal resolution
+    // (never below 62%). As soon as there is headroom again it climbs back to
+    // full resolution. Nothing else about the picture changes.
+    updateDRS(ms) {
+      if (this.state !== 'playing' || document.hidden || ms > 250) { this.drsAcc = 0; this.drsN = 0; return; }
+      this.drsAcc = (this.drsAcc || 0) + ms; this.drsN = (this.drsN || 0) + 1;
+      if (this.drsAcc < 600) return;
+      const avg = this.drsAcc / this.drsN, s = this.drsScale || 1;
+      this.drsAcc = 0; this.drsN = 0;
+      this.drsCool = Math.max(0, (this.drsCool || 0) - 0.6);
+      if (avg > 18.3 && s > DRS_MIN) {                 // below ~55 fps: step down
+        this.drsScale = Math.max(DRS_MIN, s - (avg > 25 ? 0.12 : 0.06));
+        this.drsCeil = s - 0.02; this.drsCool = 15; this.drsGood = 0;
+        this.resize();
+      } else if (avg < 17.4 && s < 1) {                // holding 60: try to climb back
+        this.drsGood = (this.drsGood || 0) + 0.6;
+        const cap = this.drsCool > 0 ? (this.drsCeil || 1) : 1;
+        if (this.drsGood >= 2.4 && s + 0.04 <= cap + 1e-6) { this.drsScale = Math.min(1, s + 0.04); this.drsGood = 0; this.resize(); }
+      } else this.drsGood = 0;
+    }
+
     loop() {
-      requestAnimationFrame(() => this.loop());
+      requestAnimationFrame((ts) => this.loop(ts));
+      const now = performance.now();
+      if (this._lastFrame) this.updateDRS(now - this._lastFrame);
+      this._lastFrame = now;
       const rawDt = Math.min(this.clock.getDelta(), 1 / 20);
       // slow motion eases back to normal
       this.timeScale += (1 - this.timeScale) * Math.min(1, rawDt * (this.state === 'dying' ? 1.2 : 3));
@@ -688,10 +718,10 @@
 
       if (this.settings.fps) {
         this.fpsAcc += rawDt; this.fpsFrames++;
-        if (this.fpsAcc > 0.5) { UI.fps(true, Math.round(this.fpsFrames / this.fpsAcc)); this.fpsAcc = 0; this.fpsFrames = 0; }
+        if (this.fpsAcc > 0.5) { UI.fps(true, Math.round(this.fpsFrames / this.fpsAcc) + ((this.drsScale || 1) < 1 ? ' · ' + Math.round((this.drsScale || 1) * 100) + '%' : '')); this.fpsAcc = 0; this.fpsFrames = 0; }
       }
-      // gentle auto-downgrade if a device clearly can't keep up
-      if (this.state === 'playing' && !this.autoDowngraded) {
+      // last resort only: dynamic resolution is already at its floor and it's still < 26 fps
+      if (this.state === 'playing' && !this.autoDowngraded && (this.drsScale || 1) <= DRS_MIN + 0.001) {
         this.perfAcc += rawDt; this.perfFrames++;
         if (this.perfAcc > 5) {
           const fps = this.perfFrames / this.perfAcc;
@@ -790,7 +820,8 @@
       this.updateCamera(dt);
       const sN = clamp((this.speed - C.SPEED_START) / (C.SPEED_MAX - C.SPEED_START), 0, 1);
       this.fx.updateStreaks(dt, this.camera, boost ? 1 : Math.max(0, sN - 0.6) * 1.2);
-      UI.setHUD(this.score, this.distance, this.coins, this.multiplier);
+      this.hudT = (this.hudT || 0) + dt;
+      if (this.hudT >= 0.05) { this.hudT = 0; UI.setHUD(this.score, this.distance, this.coins, this.multiplier); }
       UI.setPowerups(this.powerups);
       UI.lemons(this.lemons, this.lemonNeed, this.powerups.remaining('lemonade') / C.LEMONADE.duration);
       this.missions.runValue('distRun', this.distance);
@@ -912,6 +943,7 @@
       if (this.state === 'playing' && this.S.weather) this.S.weather.applyEnv(this.scene.fog, this.hemi, this.sun);
       else this.envExposureMul = 1;
       for (const m of VR.nightMaterials) m.emissiveIntensity = c.night * 1.1;
+      for (const m of VR.nightGlow) m.emissiveIntensity = c.night * m.userData.nightK * (1 - dark * 0.5);
       this.collect.coinMat.emissiveIntensity = 0.8 + c.night * 1.4 + dark * 1.0;
       // the hero stays white everywhere; it only settles a hair in tunnels / at night
       VR.charUniforms.uDim.value = 0.04 * c.night + 0.07 * dark;

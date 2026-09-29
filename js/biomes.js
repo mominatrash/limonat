@@ -140,8 +140,8 @@
     },
     city: {
       name: 'المدينة ليلاً', nameEn: 'City Nights', particles: 'fireflies',
-      look: look({ top: 0x060b1f, horizon: 0x2c2f5e, bottom: 0x10122a, sun: 0xaec8ff, sunDir: [0.3, 0.5, -0.81], stars: 1, fog: 0x1d2044, fogNear: 45, fogFar: 210,
-        ridge: 'city', ridgeFar: 0x1a1d3a, ridgeNear: 0x11132a, hemiSky: 0x6a7abf, hemiGround: 0x1a1a2a, hemi: 0.75, sunI: 0.8, cloud: 0x2a2d4a, exposure: 1.2, bloom: 0.7, tint: 0xe8ecff, night: 1 }),
+      look: look({ top: 0x060b1f, horizon: 0x2c2f5e, bottom: 0x10122a, sun: 0xc4d6ff, sunDir: [-0.35, 0.7, 0.62], stars: 1, fog: 0x262b58, fogNear: 60, fogFar: 240,
+        ridge: 'city', ridgeFar: 0x1a1d3a, ridgeNear: 0x11132a, hemiSky: 0x8f9ee6, hemiGround: 0x3a3d5c, hemi: 1.5, sunI: 1.9, cloud: 0x2a2d4a, exposure: 1.28, bloom: 0.7, tint: 0xe8ecff, night: 1 }),
       ground: { mat: 'grass', color: 0x2e3b33, color2: 0x273029, hills: 0.15 },
       styleWeights: { normal: 10, bridge: 1, tunnel: 1, station: 2 },
       scenery(mb, rnd, v, place) {

@@ -274,6 +274,17 @@ window.VR = window.VR || {};
   const NO_CAST = new Set(['wire', 'grass', 'sand', 'snow', 'glow', 'glowSoft', 'neon', 'gravel', 'tiles']);
 
   const matCache = {};
+  // NIGHT READABILITY: these materials light up after dark (strength x night):
+  // warning stripes act like reflective paint, train/station windows are lit,
+  // rails pick up a cool moonlit sheen so the three lanes stay readable.
+  const NIGHT_GLOW = {
+    hazard:   { color: 0xffffff, map: true, k: 1.1 },
+    redwhite: { color: 0xffffff, map: true, k: 1.0 },
+    glass:    { color: 0xffd9a0, k: 0.9 },
+    rail:     { color: 0x8fa6e0, k: 0.45 },
+    container:{ color: 0xffffff, map: true, k: 0.22 },
+  };
+  VR.nightGlow = [];
   VR.Mat = {
     recipe(key) { return RECIPES[key.split('#')[0]] || RECIPES.std; },
     uvScale(key) { return this.recipe(key).uv || 1; },
@@ -291,6 +302,12 @@ window.VR = window.VR || {};
         });
         if (r.map) m.map = VR.Tex.get(r.map);
         m.envMapIntensity = r.env ?? 0.8;
+        const ng = NIGHT_GLOW[key.split('#')[0]];
+        if (ng) {
+          m.emissive = new T.Color(ng.color); m.emissiveIntensity = 0;
+          if (ng.map && m.map) m.emissiveMap = m.map;
+          m.userData.nightK = ng.k; VR.nightGlow.push(m);
+        }
         if (r.nearFade) {
           const [a, b] = r.nearFade;
           m.onBeforeCompile = (sh) => {

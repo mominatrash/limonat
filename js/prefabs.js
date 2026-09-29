@@ -511,6 +511,7 @@
         const r = VR.rng(7);
         mb.box('wood', 0xa8743e, 0, 0.62, -0.9, 1.8, 0.5, 1.7, { r: 0.05 });
         mb.box('wood', 0x8a5a2e, 0, 0.9, -0.9, 1.9, 0.08, 1.8);
+        mb.box('hazard', 0xffffff, 0, 0.62, -0.04, 1.5, 0.16, 0.03);            // reflector strip
         for (const s of [-1, 1]) for (const z of [-0.35, -1.45]) {
           mb.cyl('wood', 0x5a3a1e, s * 0.95, 0.3, z, 0.3, 0.3, 0.1, { rz: PI / 2, seg: 14 });
           mb.cyl('metal', 0x333333, s * 1.0, 0.3, z, 0.08, 0.08, 0.06, { rz: PI / 2, seg: 8 });
@@ -534,6 +535,7 @@
           mb.box('wood', 0x8a5a2e, x + 0.03, 1.02, -0.6, 1.04, 0.06, 1.14);
           for (let i = 0; i < 6; i++) VR.Props.lemon(mb, x + ((i % 3) - 1) * 0.28, 0.98, -0.6 + ((i / 3 | 0) - 0.5) * 0.4, 1.4, r() * 3);
         }
+        mb.box('hazard', 0xffffff, 0, 0.28, 0.0, 2.1, 0.12, 0.03);               // reflector strip
         return mb;
       },
     },

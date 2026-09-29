@@ -60,6 +60,7 @@
 
   const fmt = (n) => Math.floor(n).toLocaleString('en-US');
   let toastTimer = 0, biomeTimer = 0;
+  const hudEls = {};
   const bars = {};
 
   const UI = {
@@ -97,9 +98,10 @@
     loadProgress(p) { $('loadFill').style.width = Math.round(p * 100) + '%'; },
 
     setHUD(score, dist, coins, mult) {
-      $('hudScore').textContent = fmt(score);
-      $('hudDist').textContent = fmt(dist) + ' ' + t('m');
-      $('hudCoins').textContent = fmt(coins);
+      const set = (id, v) => { const el = hudEls[id] || (hudEls[id] = $(id)); if (el.__v !== v) { el.__v = v; el.textContent = v; } };
+      set('hudScore', fmt(score));
+      set('hudDist', fmt(dist) + ' ' + t('m'));
+      set('hudCoins', fmt(coins));
       const m = 'x' + mult;
       if ($('hudMult').textContent !== m) {
         $('hudMult').textContent = m;
