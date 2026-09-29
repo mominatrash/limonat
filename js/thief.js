@@ -54,15 +54,52 @@
     return root;
   }
 
+  // Zahran's courier drone (story): quad rotors, a claw holding a map scroll, red eye
+  function buildDrone() {
+    const root = new T.Group(), body = new T.Group(); root.add(body);
+    const mb = new VR.MB(24);
+    mb.box('paint', 0x2b2f3a, 0, 0.9, 0, 0.5, 0.16, 0.5, { r: 0.07 });                        // hull
+    mb.box('paint', 0xf2b705, 0, 0.99, 0, 0.36, 0.06, 0.36, { r: 0.03 });                     // yellow top plate (Zahran colours)
+    mb.sphere('glow', 0xff3b30, 0, 0.9, -0.26, 0.045, { seg: 10 });                             // camera eye
+    for (const [x, z] of [[-0.36, -0.36], [0.36, -0.36], [-0.36, 0.36], [0.36, 0.36]]) {
+      mb.box('paint', 0x2b2f3a, x / 2, 0.92, z / 2, 0.06, 0.05, 0.36, { ry: Math.atan2(x, z), r: 0.02 });   // arms
+      mb.cyl('metal', 0x5a606b, x, 0.97, z, 0.05, 0.06, 0.08, { seg: 12 });                                // motors
+    }
+    for (const s of [-1, 1]) mb.cyl('metal', 0x9aa2ad, s * 0.08, 0.72, 0, 0.012, 0.012, 0.26, { rz: s * 0.4, seg: 6 });   // claw
+    mb.cyl('flat', 0xf1e3c2, 0, 0.6, 0, 0.05, 0.05, 0.34, { rz: Math.PI / 2, seg: 12 });   // the stolen map scroll
+    mb.cyl('flat', 0xc0392b, 0, 0.6, 0, 0.055, 0.055, 0.04, { rz: Math.PI / 2, seg: 12 });
+    body.add(mb.build({ receive: false }));
+    const rotors = [];
+    for (const [x, z] of [[-0.36, -0.36], [0.36, -0.36], [-0.36, 0.36], [0.36, 0.36]]) {
+      const r = new T.Mesh(new T.CylinderGeometry(0.2, 0.2, 0.01, 18), new T.MeshBasicMaterial({ color: 0xcfd6e0, transparent: true, opacity: 0.35, depthWrite: false }));
+      r.position.set(x, 1.02, z); body.add(r); rotors.push(r);
+    }
+    const mk = new T.Mesh(new T.ConeGeometry(0.12, 0.26, 4), new T.MeshBasicMaterial({ color: new T.Color(2.2, 0.5, 0.3), fog: false }));
+    mk.rotation.x = Math.PI; mk.position.y = 1.45; root.add(mk);
+    root.userData = { body, rotors, mk, drone: true };
+    root.scale.setScalar(1.35); root.visible = false;
+    return root;
+  }
+
   class Thief {
     constructor(game) {
       this.name = 'thief'; this.g = game;
-      this.goat = buildGoat(); game.scene.add(this.goat);
+      this.models = { goat: buildGoat(), drone: buildDrone() };
+      game.scene.add(this.models.goat, this.models.drone);
+      this.goat = this.models.goat;
       this.active = false;
+      UI.addStrings({ droneAppears: 'الدرون خطف الخريطة! الحقه', droneCaught: 'وقّعت الدرون!', droneEscaped: 'الدرون هرب!', allyAppears: 'مِشمِش جاي يساعدك! 🐐' },
+                    { droneAppears: 'The drone took the map! Chase it', droneCaught: 'Drone down!', droneEscaped: 'The drone got away!', allyAppears: 'Mishmish is here to help! 🐐' });
     }
-    warm(on) { this.goat.visible = on; }
-    reset() { this.active = false; this.goat.visible = false; this.nextAt = 450 + this.g.evRnd() * 450; }
+    warm(on) { this.models.goat.visible = on; this.models.drone.visible = on; }
+    reset() { this.active = false; this.models.goat.visible = false; this.models.drone.visible = false; this.nextAt = 450 + this.g.evRnd() * 450; }
     runStart(opts) {
+      // story options: thiefSkin 'drone' (Zahran's drone) · thiefMode 'ally' (the goat runs with you and helps)
+      this.models.goat.visible = this.models.drone.visible = false;
+      this.skin = opts.thiefSkin === 'drone' ? 'drone' : 'goat';
+      this.goat = this.models[this.skin];
+      this.ally = opts.thiefMode === 'ally';
+      this.goat.userData.mk.material.color.setRGB(...(this.ally ? [0.4, 2.2, 0.6] : this.skin === 'drone' ? [2.2, 0.5, 0.3] : [2.2, 1.7, 0.3]));
       this.forcedAt = opts.thief || null;
       this.nextAt = this.forcedAt || 450 + this.g.evRnd() * 450;
       this.caught = 0;
@@ -76,8 +113,9 @@
       this.x = this.lane * LW; this.y = 0; this.vy = 0; this.hop = 0;
       this.nextLane = 1.6; this.dropAcc = 0; this.escaping = false; this.phase = 0;
       this.goat.visible = true;
-      UI.toast(UI.t('thiefAppears'), 1900, true);
-      VR.Audio.play('baa', { pan: (this.x - p.x) / 5 });
+      if (this.ally) this.gap = 9;
+      UI.toast(UI.t(this.ally ? 'allyAppears' : this.skin === 'drone' ? 'droneAppears' : 'thiefAppears'), 1900, true);
+      if (this.skin === 'drone') VR.Audio.play('whoosh', { pan: (this.x - p.x) / 5 }); else VR.Audio.play('baa', { pan: (this.x - p.x) / 5 });
     }
     blocked(lane, z0, z1) {
       for (const o of this.g.world.obstacles) {
@@ -96,15 +134,20 @@
       this.t += dt;
       // the runner gains ~1.4 m/s on the goat (faster while boosting)
       const base = g.speedAt(g.distance);
-      const goatV = this.escaping ? g.speed + 9 : base - 1.4;
-      this.gap -= (g.speed - goatV) * dt;
-      if (this.t > 22 && !this.escaping) { this.escaping = true; UI.toast(UI.t('thiefEscaped'), 1500); VR.Audio.play('baa'); }
-      if (this.gap > 60) { this.active = false; this.goat.visible = false; this.nextAt = g.distance + 900 + g.evRnd() * 700; return; }
+      if (this.ally) this.gap += (3.4 - this.gap) * Math.min(1, dt * 0.8);       // a friend keeps pace just ahead of you
+      else {
+        const goatV = this.escaping ? g.speed + 9 : base - 1.4;
+        this.gap -= (g.speed - goatV) * dt;
+        const limit = this.skin === 'drone' ? 30 : 22;
+        if (this.t > limit && !this.escaping) { this.escaping = true; UI.toast(UI.t(this.skin === 'drone' ? 'droneEscaped' : 'thiefEscaped'), 1500); if (this.skin === 'goat') VR.Audio.play('baa'); }
+      }
+      if (this.gap > 60 && !this.ally) { this.active = false; this.goat.visible = false; this.nextAt = g.distance + 900 + g.evRnd() * 700; return; }
       const z = p.z - Math.max(0.6, this.gap);
       // lane changes: dodge blocked lanes ahead
       this.nextLane -= dt;
       if (this.nextLane <= 0 || this.blocked(this.lane, z, z - 9)) {
-        const options = [-1, 0, 1].filter(l => Math.abs(l - this.lane) === 1 && !this.blocked(l, z + 2, z - 12));
+        let options = [-1, 0, 1].filter(l => Math.abs(l - this.lane) === 1 && !this.blocked(l, z + 2, z - 12));
+        if (this.ally) options = options.filter(l => l !== p.lane);   // a friend stays out of your lane
         if (options.length) { this.lane = options[(g.evRnd() * options.length) | 0]; }
         this.nextLane = 1.8 + g.evRnd() * 1.8;
       }
@@ -114,15 +157,29 @@
       const ground = g.world.surfaceAt(this.x, z, 99, 0.25).h;
       let low = false;
       for (const o of g.world.obstacles) if (!o.ramp && o.lane === this.lane && o.z > z - 2.5 && o.z - o.len < z + 0.3 && o.kind !== 'block') low = true;
-      if ((low || ground > this.y + 0.4) && this.y <= ground + 0.02) { this.vy = low ? 7 : 9; }
-      this.vy -= 30 * dt; this.y += this.vy * dt;
-      if (this.y < ground) { this.y = ground; this.vy = 0; }
+      if (this.skin === 'drone') {                       // flies: hovers over whatever is below
+        const tgt = Math.max(ground, low ? 2.6 : 0) + 1.0 + Math.sin(this.t * 3) * 0.12;
+        this.y += (tgt - this.y) * Math.min(1, dt * 5); this.vy = (tgt - this.y) * 5;
+      } else {
+        if ((low || ground > this.y + 0.4) && this.y <= ground + 0.02) { this.vy = low ? 7 : 9; }
+        this.vy -= 30 * dt; this.y += this.vy * dt;
+        if (this.y < ground) { this.y = ground; this.vy = 0; }
+      }
       // coins trail behind it
       this.dropAcc += g.speed * dt;
-      if (this.dropAcc > 3.2 && !this.escaping) { this.dropAcc = 0; g.collect.spawnCoin(this.x, this.y + 0.9, z + 0.4, null); }
+      if (this.dropAcc > (this.ally ? 2.2 : 3.2) && !this.escaping) { this.dropAcc = 0; g.collect.spawnCoin(this.x, (this.skin === 'drone' ? Math.max(0, this.y - 0.6) : this.y) + 0.9, z + 0.4, null); }
+      if (this.ally && Math.random() < dt * 0.12) VR.Audio.play('baa', { pan: (this.x - p.x) / 5 });
       // animation: gallop
       this.phase += dt * (8 + g.speed * 0.25);
       const U = this.goat.userData, s = Math.sin(this.phase), c2 = Math.sin(this.phase * 2);
+      if (U.drone) {
+        for (const r of U.rotors) r.rotation.y += dt * 40;
+        U.body.rotation.x = -0.25; U.body.rotation.z = (this.lane * LW - this.x) * 0.15;
+        U.mk.position.y = 1.45 + Math.abs(Math.sin(this.t * 5)) * 0.15; U.mk.rotation.y += dt * 4;
+        this.goat.position.set(this.x, this.y - 0.6, z);
+        if (!this.escaping && Math.abs(p.x - this.x) < 1.0 && this.gap < 1.3 && p.y + 1.6 > this.y - 0.2) this.catch(z);
+        return;
+      }
       U.legs[0].rotation.x = s * 0.9; U.legs[3].rotation.x = s * 0.9;
       U.legs[1].rotation.x = -s * 0.9; U.legs[2].rotation.x = -s * 0.9;
       U.body.position.y = Math.abs(c2) * 0.06; U.body.rotation.x = s * 0.06;
@@ -132,7 +189,7 @@
       this.goat.rotation.y = (tx - this.x) * -0.12;
       this.goat.rotation.x = this.vy > 0.5 ? -0.25 : this.vy < -0.5 ? 0.15 : 0;
       // caught?
-      if (!this.escaping && Math.abs(p.x - this.x) < 1.0 && this.gap < 1.3 && Math.abs(p.y - this.y) < 1.4) this.catch(z);
+      if (!this.ally && !this.escaping && Math.abs(p.x - this.x) < 1.0 && this.gap < 1.3 && Math.abs(p.y - this.y) < 1.4) this.catch(z);
     }
     catch(z) {
       const g = this.g, reward = 80 + this.caught * 20;
@@ -141,11 +198,12 @@
       g.coins += reward; g.score += 500 * g.multiplier;
       VR.Audio.play('catch'); VR.Audio.hush(700);
       const gx = this.x, pan = (gx - g.player.x) / 5;
-      setTimeout(() => VR.Audio.play('baa', { pan }), 380);
+      if (this.skin === 'drone') { g.fx.smash(this.x, this.y, z, 0x2b2f3a); VR.Audio.play('shieldBreak'); }
+      else setTimeout(() => VR.Audio.play('baa', { pan }), 380);
       g.onGem(this.x, this.y + 1, z); g.onGem(this.x, this.y + 1.2, z);
       g.fx.confetti(this.x, this.y + 1.2, z, 60); g.fx.ring(this.x, this.y + 0.8, z, 0xffe14a, 24, 6);
       g.vibrate(40);
-      UI.toast(UI.t('thiefCaught') + '  +' + reward, 1900, true);
+      UI.toast(UI.t(this.skin === 'drone' ? 'droneCaught' : 'thiefCaught') + '  +' + reward, 1900, true);
       g.missions.bump('thieves');
       g.emit('thiefCaught');
     }

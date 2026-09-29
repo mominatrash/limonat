@@ -114,7 +114,7 @@ existing progress carries over.
 | Pets | `pets.js` | Cat (next lane) and canary (both lanes, lemons too) |
 | Lemonade stand | `stand.js` | Lemons are banked; idle income, sell, 10 upgrade levels |
 | Character creator | `creator.js` | Colours per part, accessory, scarf |
-| Story mode | `story.js` | 8 seeded levels, dialogue, finish line, 3 stars |
+| Story mode | `story.js` | «سرّ البيّارة»: 4 chapters × 4 seeded levels, comic panels, radio calls, 16 hidden letters + true ending, bulldozer / drone bosses, goat ally, 3 stars |
 | Seasonal events | `events.js` | Olive harvest (Oct–Nov), Ramadan, winter; Settings -> Season to preview |
 | Daily challenge + ghost | `daily.js` | Same seed for everyone; share link `#c=seed.score.name.data` |
 
