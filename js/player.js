@@ -384,6 +384,22 @@
         b.rotation.x = st.x;
         b.rotation.z = b.userData.rest + st.z;
       });
+      // cloth ribbons (headband tails etc.): same spring as the hair, plus a speed flutter
+      if (r.springs) {
+        const tt = performance.now() * 0.001;
+        for (const ch of r.springs) ch.bones.forEach((b, i) => {
+          const st = ch.st[i], g = ch.g[i];
+          const fl = Math.sin(tt * (11 + i * 2.3) + i * 1.7) * ch.flutter * (running ? 0.4 + speedN : 0.15) * g;
+          const tx = clamp(-acc.z * 0.004 * g + drag * g * 2.2 + fl, -1.4, 1.4);
+          const tz = clamp(acc.x * 0.003 * g + fl * 0.6, -0.8, 0.8);
+          st.vx += ((tx - st.x) * ch.k - st.vx * ch.d) * dt;
+          st.vz += ((tz - st.z) * ch.k - st.vz * ch.d) * dt;
+          st.x += st.vx * dt; st.z += st.vz * dt;
+          b.rotation.x = b.userData.rx0 + st.x * ch.sx * (i === 0 ? 1 : 0.45);
+          b.rotation.z = st.z * ch.sz * (i === 0 ? 1 : 0.5);
+        });
+      }
+      if (r.backGear) r.backGear.visible = !this.jetpack.visible;     // the jetpack takes the back
       if (r.scarf) {
         r.bones.chest.localToWorld(this._anchor.set(0, 0.25, 0.08));
         this.object.worldToLocal(this._anchor);

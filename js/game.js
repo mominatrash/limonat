@@ -31,6 +31,7 @@
       this.bank = UI.store.get('bank', 0);
       this.owned = new Set(UI.store.get('owned', ['hero']));
       this.owned.add('hero');
+      for (const c of VR.CHARACTERS) if (!c.price && !c.event) this.owned.add(c.id);   // free characters are always yours
       this.selectedId = UI.store.get('character', 'hero');
       if (!VR.CHARACTERS.some(c => c.id === this.selectedId) || !this.owned.has(this.selectedId)) this.selectedId = 'hero';
       this.charIndex = Math.max(0, VR.CHARACTERS.findIndex(c => c.id === this.selectedId));
