@@ -488,7 +488,7 @@
     }
 
     // ------------------------------------------------------------ rules
-    speedAt(d) { return C.SPEED_START + (C.SPEED_MAX - C.SPEED_START) * (1 - Math.exp(-d / C.SPEED_RAMP)); }
+    speedAt(d) { return C.SPEED_START + (C.SPEED_MAX - C.SPEED_START) * (1 - Math.exp(-d / (this.mode === 'story' ? C.STORY_SPEED_RAMP : C.SPEED_RAMP))); }
     difficultyAt(d) { return this.diffFn ? this.diffFn(d) : 1 - Math.exp(-d / C.DIFFICULTY_RAMP); }
     multiplierAt(d) { let m = 0; for (const s of C.MULTIPLIER_STEPS) if (d >= s) m++; return m; }
 

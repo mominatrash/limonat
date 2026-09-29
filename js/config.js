@@ -26,9 +26,10 @@ VR.CONFIG = {
   // speed = START + (MAX - START) * (1 - e^(-distance / RAMP))
   SPEED_START: 13,
   SPEED_MAX: 31,
-  SPEED_RAMP: 3200,
+  SPEED_RAMP: 1500,           // lower = faster ramp (was 3200)
+  STORY_SPEED_RAMP: 3200,     // story levels keep the calmer ramp they were designed for
   // difficulty 0..1 used by the chunk generator
-  DIFFICULTY_RAMP: 4200,
+  DIFFICULTY_RAMP: 1800,      // (was 4200)
 
   // ---------- World generation ----------
   CHUNK_LENGTH: 40,
