@@ -713,6 +713,7 @@
       if (this.state === 'playing') this.updatePlaying(dt);
       else if (this.state === 'dying' || this.state === 'gameover' || (VR.DEATH_STATES || []).includes(this.state)) this.updateDeath(dt, rawDt);
       else if (this.state === 'levelDone') this.emit('finishUpdate', rawDt);
+      else if (this.state === 'partyWait') this.emit('spectate', dt);
       else if (this.state === 'menu' || this.state === 'character' || this.state === 'loading' || this.state === 'missions' || (VR.MENU_STATES || []).includes(this.state)) this.updateMenu(rawDt);
       else if (this.state === 'settings' && this.settingsReturn !== 'paused') this.updateMenu(rawDt);
       else if (this.state === 'paused' || this.state === 'settings') { /* frozen frame */ }
@@ -834,6 +835,35 @@
       this.missions.runValue('distRun', this.distance);
       this.missions.runValue('coinsRun', this.coins);
       this.missions.runValue('scoreRun', this.score);
+    }
+
+    // Move the whole railway to distance D without playing through it (used to
+    // watch a friend's run). Ahead: stream the chunks in between. Behind: the
+    // world is seeded and built from chunk numbers, so rebuild it from the start.
+    jumpTo(D) {
+      const w = this.world, p = this.player, L = C.CHUNK_LENGTH;
+      let pz = p.z, left = D - this.distance;
+      if (left < -2) { w.reset(this.runOpts || {}); this.fx.clear(); pz = 0; left = D; }
+      const stream = (z) => {
+        while (w.nextZ > z - C.CHUNKS_AHEAD * L) w.spawnChunk(0, 0, this);
+        while (w.chunks.length && w.chunks[0].z0 - L > z + 14) w.releaseChunk(w.chunks[0]);
+      };
+      while (left > 0) {
+        const st = Math.min(L, left); pz -= st; left -= st;
+        stream(pz);
+        if (pz < -C.RECENTER_DISTANCE) { const dz = -pz; pz = 0; w.shift(dz); this.fx.shift(dz); this.emit('shift', dz); }
+      }
+      stream(pz);
+      p.z = pz; p.object.position.z = pz;
+      this.distance = D;
+      this.speed = this.speedAt(D);
+    }
+    // put the chase camera straight behind the runner (no glide)
+    snapCamera() {
+      const p = this.player;
+      this.camera.position.set(p.x * (this.portrait ? 0.82 : 0.72), C.CAMERA_HEIGHT + p.y * 0.62, p.z + C.CAMERA_DISTANCE);
+      this.camLook.set(p.x * 0.85, (this.portrait ? 0.35 : 1.2) + p.y * 0.55, p.z - C.CAMERA_LOOK_AHEAD);
+      this.camera.lookAt(this.camLook);
     }
 
     // junction: warn on approach, apply the choice when the gate is passed

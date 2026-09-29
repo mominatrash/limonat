@@ -151,7 +151,7 @@
         ptLeave: 'اطلع', ptYou: 'إنت', ptFriend: 'صاحبك', ptJoined: 'دخل صاحبك', ptLeft: 'صاحبك طلع من الغرفة', ptLost: 'انقطع الاتصال مع صاحبك',
         ptErrRoom: 'ما لقينا غرفة بهالكود، تأكد منه', ptErrNet: 'ما قدرنا نوصل لصاحبك. جرّبوا واي فاي أو غيّروا الشبكة', ptErrSrv: 'في مشكلة بالإنترنت أو بسيرفر الربط، جرّب كمان شوي', ptErrOld: 'هالمتصفح ما بيدعم اللعب مع صاحب', ptFull: 'الغرفة مليانة',
         ptCopied: 'تم نسخ الرابط!', ptShareText: 'تعال العب معي ليمونات! كود الغرفة:',
-        ptFell: 'وقعت!', ptStillRun: 'صاحبك لسا بيركض… خلينا نشوف إذا بيسبقك', ptCanSave: 'صاحبك بيقدر يرجّعك!', ptSaveHow: 'لازم يجمع {n} ليمونات خلال {s} ثانية',
+        ptFell: 'وقعت!', ptWatching: 'عم تتفرج على {n}', ptStillRun: 'وقعت… خلينا نشوف إذا بيسبقك', ptCanSave: 'صاحبك بيقدر يرجّعك!', ptSaveHow: 'لازم يجمع {n} ليمونات خلال {s} ثانية',
         ptNoSave: 'ما لحق يرجّعك… استنى لآخر الجولة', ptFriendFell: 'وقع صاحبك!', ptSaveHim: 'اجمع {n} 🍋 خلال {s} ث عشان ترجّعه', ptSaved: 'رجّعت صاحبك! 💪', ptSavedMe: 'صاحبك رجّعك! 💪', ptTooLate: 'ما لحقت ترجّعه 😢', ptBack: 'رجع صاحبك للجولة',
         ptWin: 'فزت! 🏆', ptLose: 'صاحبك فاز هالمرة', ptTie: 'تعادل!', ptTeam: 'نتيجة الفريق', ptTeamS: 'الفريق', ptAgain: 'جولة ثانية', ptReward: 'مكافأة', ptFrReady: 'صاحبك جاهز لجولة ثانية',
       }, {
@@ -162,7 +162,7 @@
         ptLeave: 'Leave', ptYou: 'You', ptFriend: 'Friend', ptJoined: 'Your friend joined', ptLeft: 'Your friend left the room', ptLost: 'Lost the connection to your friend',
         ptErrRoom: 'No room with that code — check it', ptErrNet: "Couldn't reach your friend. Try Wi-Fi or another network", ptErrSrv: 'Internet or matchmaking server problem, try again soon', ptErrOld: "This browser can't play with a friend", ptFull: 'The room is full',
         ptCopied: 'Link copied!', ptShareText: 'Come play Limonat with me! Room code:',
-        ptFell: 'You fell!', ptStillRun: 'Your friend is still running… will they beat you?', ptCanSave: 'Your friend can bring you back!', ptSaveHow: 'They need {n} lemons within {s} seconds',
+        ptFell: 'You fell!', ptWatching: 'Watching {n}', ptStillRun: 'You fell… will they beat you?', ptCanSave: 'Your friend can bring you back!', ptSaveHow: 'They need {n} lemons within {s} seconds',
         ptNoSave: "They didn't make it… wait for the end of the round", ptFriendFell: 'Your friend fell!', ptSaveHim: 'Grab {n} 🍋 in {s}s to bring them back', ptSaved: 'You saved your friend! 💪', ptSavedMe: 'Your friend saved you! 💪', ptTooLate: 'Too late to save them 😢', ptBack: 'Your friend is back in the run',
         ptWin: 'You win! 🏆', ptLose: 'Your friend won this time', ptTie: "It's a tie!", ptTeam: 'Team score', ptTeamS: 'Team', ptAgain: 'Play again', ptReward: 'Reward', ptFrReady: 'Your friend is ready for another round',
       });
@@ -176,7 +176,7 @@
       UI.addScreen('party');
       UI.addScreen('partyWait', 'partyWait', false);
       UI.addScreen('partyOver', 'partyOver', false);
-      (VR.DEATH_STATES = VR.DEATH_STATES || []).push('partyWait', 'partyOver');
+      (VR.DEATH_STATES = VR.DEATH_STATES || []).push('partyOver');
       const add = (html, parent = document.body) => { const d = document.createElement('div'); d.innerHTML = html.trim(); const el = d.firstElementChild; parent.appendChild(el); return el; };
       add(`<section id="party" class="screen dim" hidden><div class="card glass rise pt-card">
           <h2 data-i18n="ptTitle"></h2>
@@ -197,11 +197,12 @@
           <div class="pt-status" id="ptStatus"></div>
           <button class="btn" id="ptBack"><svg><use href="#i-home"/></svg><span data-i18n="ptLeave"></span></button>
         </div></section>`);
-      add(`<section id="partyWait" class="screen" hidden><div class="card glass rise pt-card">
-          <div class="pt-big" id="pwIcon">💥</div><h2 id="pwTitle"></h2><div class="pt-status" id="pwText"></div>
-          <div class="pt-res" id="pwRows"></div>
-          <button class="btn" id="pwLeave"><svg><use href="#i-home"/></svg><span data-i18n="ptLeave"></span></button>
-        </div></section>`);
+      // watching the friend after you fall: the game keeps running on their runner
+      add(`<section id="partyWait" class="screen pt-spec" hidden>
+          <div class="pt-spec-top glass"><span class="pt-spec-ic" id="pwIcon">👀</span><div class="pt-spec-tx"><b id="pwTitle"></b><small id="pwText"></small></div></div>
+          <div class="pt-spec-bot"><div class="pt-res pt-res-mini" id="pwRows"></div>
+            <button class="btn small" id="pwLeave"><svg><use href="#i-home"/></svg><span data-i18n="ptLeave"></span></button></div>
+        </section>`);
       add(`<section id="partyOver" class="screen dim" hidden><div class="card glass rise pt-card">
           <div class="pt-big" id="poIcon">🏆</div><h2 id="poTitle"></h2><div class="pt-status" id="poText"></div>
           <div class="pt-res" id="poRows"></div>
@@ -254,6 +255,11 @@
         .pt-emo-btn{font-size:22px}
         .pt-emo-row{display:flex;gap:4px;background:rgba(16,20,34,.8);padding:4px;border-radius:999px}.pt-emo-row[hidden]{display:none}
         .pt-emo-row button{border:0;background:none;font-size:24px;padding:4px 6px;cursor:pointer;line-height:1}
+        #partyWait.pt-spec{justify-content:space-between;align-items:center;padding:calc(12px + var(--safe-t)) 12px calc(14px + var(--safe-b, 0px));pointer-events:none;background:none}
+        .pt-spec-top{display:flex;align-items:center;gap:10px;padding:8px 16px;border-radius:999px;max-width:min(94vw,520px);background:rgba(16,20,34,.78)}
+        .pt-spec-ic{font-size:26px;line-height:1}.pt-spec-tx{display:flex;flex-direction:column;line-height:1.2}.pt-spec-tx b{font-size:16px}.pt-spec-tx small{font-size:13px;color:var(--muted);font-weight:700}
+        .pt-spec-bot{display:flex;flex-direction:column;align-items:center;gap:8px;width:min(94vw,420px);pointer-events:auto}
+        .pt-res-mini{width:100%}.pt-res-mini div{padding:6px 12px;background:rgba(16,20,34,.72)}
         @media (max-width:520px){#ptHud{top:calc(96px + var(--safe-t));max-width:70vw}}`;
       document.head.appendChild(st);
 
@@ -527,6 +533,7 @@
       this.floats = [];
     }
     leaveRun() {
+      this.setMeHidden(false); this.spec = false;
       if (this.inRun && !this.meDead) this.send({ t: 'dead', score: Math.floor(this.g.score), dist: Math.floor(this.g.distance), quit: 1 });
       this.inRun = false; this.clearAvatar();
       this.hudEl.hidden = true; this.emoEl.hidden = true;
@@ -567,7 +574,15 @@
         else if ((this.rescue.sent -= dt) <= 0) { this.rescue.sent = 1; this.send({ t: 'resc', got: this.rescue.got, need: this.rescue.need, left: Math.ceil(this.rescue.t) }); }
       }
       // the friend's runner
-      const av = this.av, s = !this.fDead && this.sample();
+      const s = !this.fDead && this.sample();
+      this.drawFriend(dt, s);
+      this.takeItems(dt);
+      this.updateFloats(dt);
+      // HUD chip (5x a second)
+      if ((this.chipT -= dt) <= 0) { this.chipT = 0.2; this.renderChip(s); }
+    }
+    drawFriend(dt, s) {
+      const g = this.g, p = g.player, av = this.av;
       if (av) {
         const rel = s ? s.d - g.distance : 0;
         const show = !!s && rel > -2.2 && rel < 140;
@@ -586,7 +601,10 @@
           av.tag.material.opacity = Math.min(1, Math.max(0.35, (rel + 2) / 8));
         }
       }
-      // items the friend took: remove them once they exist in my world, forget them once passed
+    }
+    // items the friend took: remove them once they exist in my world, forget them once passed
+    takeItems(dt) {
+      const g = this.g, p = g.player;
       if (this.taken.length && (this.takeT -= dt) <= 0) {
         this.takeT = 0.15;
         const col = g.collect;
@@ -595,7 +613,8 @@
           return !col.takeAt(it.k, it.x, it.y, p.z - (it.d - g.distance), it.ty);
         });
       }
-      // floating emojis
+    }
+    updateFloats(dt) {
       for (let i = this.floats.length - 1; i >= 0; i--) {
         const e = this.floats[i]; e.t += dt;
         e.sp.position.y = e.y0 + e.t * 0.9;
@@ -603,8 +622,44 @@
         const k = Math.min(1, e.t * 6); e.sp.scale.set(0.9 * k, 0.9 * k, 1);
         if (e.t > 1.8) { e.sp.parent && e.sp.parent.remove(e.sp); e.sp.material.dispose(); this.floats.splice(i, 1); }
       }
-      // HUD chip (5x a second)
-      if ((this.chipT -= dt) <= 0) { this.chipT = 0.2; this.renderChip(s); }
+    }
+
+    // ------------------------------------------------------------ spectating
+    // After you fall your own runner is hidden and the camera rides along with
+    // the friend: the railway, trains and coins keep moving exactly as they do
+    // on their phone (same seed, same railway distance).
+    setMeHidden(h) {
+      const p = this.g.player;
+      p.object.visible = !h; if (p.shadow) p.shadow.visible = !h;
+    }
+    spectate(dt) {
+      const g = this.g, p = g.player;
+      if (!this.inRun) return;
+      const s = !this.fDead && this.sample();
+      g.fxDesat += (0 - g.fxDesat) * Math.min(1, dt * 2);
+      if (s) {
+        const dm = s.d - g.distance;
+        let snap = false;
+        if (!this.spec || dm < -6 || dm > 80) { this.spec = true; g.jumpTo(s.d); snap = true; }
+        else { p.z -= dm; g.distance = s.d; g.camera.position.z -= dm; g.camLook.z -= dm; }   // the camera rides along
+        p.x = s.x; p.y = s.y; p.object.position.set(p.x, p.y, p.z);
+        const fl = (s.f & 2) ? 1 : 0, sl = (s.f & 1) ? 1 : 0, k = Math.min(1, dt * 5);
+        p.flyW += (fl - p.flyW) * k; p.slideW += (sl - p.slideW) * k; p.laneW = 0;
+        g.speed = g.speedAt(g.distance);
+        g.world.update(dt, p, g.speed, g.difficultyAt(g.distance), g);
+        g.collect.update(dt, p, null);
+        if (p.z < -VR.CONFIG.RECENTER_DISTANCE) {
+          const dz = -p.z;
+          p.z += dz; g.world.shift(dz); g.fx.shift(dz); g.camera.position.z += dz; g.camLook.z += dz;
+          p.object.position.z = p.z; g.emit('shift', dz);
+        }
+        this.drawFriend(dt, s);
+        this.takeItems(dt);
+        g.updateEnvironment(dt);
+        if (snap) g.snapCamera(); else { g.shake = 0; g.updateCamera(dt); }
+      }
+      this.updateFloats(dt);
+      if ((this.waitT = (this.waitT || 0) - dt) <= 0) { this.waitT = 0.25; this.renderWait(); }
     }
     renderChip(s) {
       const el = document.getElementById('ptChip'), g = this.g, m = UI.t('m') || 'm';
@@ -676,13 +731,17 @@
     gameOverScreen() {
       if (!this.inRun) return false;
       if (this.fDead || !this.linked) this.finish();
-      else { this.g.setState('partyWait'); this.renderWait(); }
+      else {
+        this.spec = false; this.setMeHidden(true);
+        const g = this.g; g.deathCam = null; g.timeScale = 1; g.tunnelDark = 0;
+        g.setState('partyWait'); this.renderWait();
+      }
       return true;
     }
     renderWait() {
       const coop = this.mode === 'coop', si = this.saveInfo;
-      document.getElementById('pwIcon').textContent = coop && !this.noSave ? '🆘' : '💥';
-      document.getElementById('pwTitle').textContent = coop && !this.noSave ? UI.t('ptCanSave') : UI.t('ptFell');
+      document.getElementById('pwIcon').textContent = coop && !this.noSave ? '🆘' : '👀';
+      document.getElementById('pwTitle').textContent = coop && !this.noSave ? UI.t('ptCanSave') : UI.t('ptWatching').replace('{n}', this.frName);
       let txt;
       if (!coop) txt = UI.t('ptStillRun');
       else if (this.noSave) txt = UI.t('ptNoSave');
@@ -697,6 +756,12 @@
       if (!this.inRun || !this.meDead || !(g.state === 'partyWait' || g.state === 'dying') || !g.deathState) return;
       this.meDead = false; this.myRescued = (this.myRescued || 0) + 1;
       this.emoEl.hidden = false;
+      if (this.spec) {            // I was watching the friend: come back right next to them
+        const p = g.player, LW = VR.CONFIG.LANE_WIDTH, lane = Math.max(-1, Math.min(1, Math.round(p.x / LW)));
+        Object.assign(g.deathState, { x: lane * LW, y: p.y, z: p.z, lane });
+        p.flyW = 0; p.slideW = 0;
+      }
+      this.spec = false; this.setMeHidden(false);
       g.revive();
       this.send({ t: 'alive' });
       setTimeout(() => UI.toast(UI.t('ptSavedMe'), 1500, true), 300);
