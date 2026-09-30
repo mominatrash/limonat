@@ -1,41 +1,30 @@
 /* =====================================================================
- * COMBAT — item boxes, Zahran's enemies, the mega-drone boss and party
- * mischief.
+ * COMBAT — Zahran's gang on the railway, and the lemon as your weapon.
  *
- *  ITEM BOX 🎁 (a pickup on the tracks) rolls ONE item into your slot.
- *  Use it with the round button (bottom corner), a tap on the screen, or E / F / Enter:
- *    sling   🍋  lemon slingshot, 6 shots: knocks enemies, breaks barriers
- *    slick   🥤  lemonade spill behind you: chasers (bulldozer, bikers) slip
- *    whistle 🐐  Mishmish charges ahead in your lane for 7 s, clearing it
- *    pulse   🧲  shock-wave: every enemy nearby drops, coins fly to you
- *    dash    ⚡  1.6 s unstoppable dash that rams through everything
- *  Party race only (sent to the friend's phone):
- *    bomb    💦  juice splatters over the friend's screen
- *    peel    🍌  a banana peel dropped where you are: the friend slips on it
- *    swap    🔄  (when behind) swap places with the friend
- *    reflect 🪞  mirror: the next attack bounces back to the sender
+ *  LEMONS ARE AMMO. Every lemon in your lemon meter can be thrown (round
+ *  button / quick tap / E). The button and a crosshair only appear when
+ *  there is something worth a lemon: a drone ahead, a biker in front of
+ *  you, Zahran's courier drone (story), the mega-drone, or — in an online
+ *  race — your friend running ahead of you. So the choice is always real:
+ *  throw it now, or keep it for a lemonade rush.
  *
- *  ENEMIES (seeded per chunk, so both party phones meet the same ones):
- *    drone   hovers ahead, locks onto your lane (red beam) and dives: dodge or shoot
- *    biker   comes up from behind, cuts into your lane and brakes: dodge, stomp or shoot
- *  BOSS: Zahran's mega-drone (endless / daily / co-op) drops juice bombs on
- *  marked lanes; free lemon ammo while it's up. Co-op: both of you hit the same HP.
+ *  LEMONADE IS DEFENCE. During a rush you leave a slippery trail: the
+ *  bulldozer (story) slides back, bikers coming up behind crash, and in a
+ *  race the friend behind you slips on it.
+ *
+ *  EVERY ENEMY HAS AN ANSWER AND A REWARD
+ *    drone   locks onto your lane (beam + red ring) and dives: dodge, slide, or
+ *            throw — a downed drone gives its lemon back plus coins
+ *    biker   comes up behind, cuts into your lane and brakes: dodge, or jump on
+ *            him — stomp him and his scooter is yours (protects you from one hit)
+ *    boss    the mega-drone drops juice bombs on marked lanes; every bomb leaves
+ *            a lemon behind: dodge, grab it, throw it back (shared HP in co-op)
+ *  POWER-UPS JOIN IN: magnet pulls drones out of the sky, shield blocks a hit,
+ *  boost / star ram through enemies, sneakers make stomps easy, and the new
+ *  Mishmish bell 🔔 sends the goat charging down your lane for 7 s.
  * ===================================================================== */
 (function () {
   const T = THREE, C = VR.CONFIG, UI = VR.UI, LW = C.LANE_WIDTH;
-
-  const ITEMS = {
-    sling:   { e: '🍋', n: 6, ar: 'مقلاع الليمون', en: 'Lemon slingshot' },
-    slick:   { e: '🥤', n: 1, ar: 'بقعة ليموناضة', en: 'Lemonade slick' },
-    whistle: { e: '🐐', n: 1, ar: 'صفّارة مشمش', en: 'Mishmish whistle' },
-    pulse:   { e: '🧲', n: 1, ar: 'نبضة مغناطيس', en: 'Magnet pulse' },
-    dash:    { e: '⚡', n: 1, ar: 'اندفاعة', en: 'Dash strike' },
-    bomb:    { e: '💦', n: 1, ar: 'قنبلة عصير', en: 'Juice bomb', pvp: 1 },
-    peel:    { e: '🍌', n: 1, ar: 'قشرة موز', en: 'Banana peel', pvp: 1 },
-    swap:    { e: '🔄', n: 1, ar: 'تبديل', en: 'Swap', pvp: 1 },
-    reflect: { e: '🪞', n: 1, ar: 'مراية', en: 'Mirror', pvp: 1 },
-  };
-  VR.COMBAT_ITEMS = ITEMS;
 
   // ------------------------------------------------------------ models
   function buildHornet() {
@@ -125,17 +114,10 @@
     mb.sphere('glow', 0xff5a36, 0, 0.44, 0, 0.06, { seg: 8 });
     const m = mb.build({ receive: false }); m.visible = false; return m;
   }
-  function buildPeel() {
-    const g = new T.Group(), mb = new VR.MB(76);
-    for (let i = 0; i < 4; i++) {
-      const a = i * Math.PI / 2 + 0.4;
-      mb.box('gloss', 0xffd84a, Math.sin(a) * 0.22, 0.05, Math.cos(a) * 0.22, 0.16, 0.04, 0.42, { ry: a, rx: -0.25, r: 0.02 });
-    }
-    mb.sphere('gloss', 0xf2c21a, 0, 0.1, 0, 0.12, { sy: 0.8, seg: 10 });
-    mb.cyl('flat', 0x5a3a1e, 0, 0.22, 0, 0.03, 0.04, 0.1, { seg: 6 });
-    g.add(mb.build({ receive: false }));
-    g.scale.setScalar(1.5); g.visible = false;
-    return g;
+  function buildPuddle() {
+    const m = new T.Mesh(new T.CircleGeometry(1, 20), new T.MeshBasicMaterial({ color: 0xffe14a, transparent: true, opacity: 0.45, depthWrite: false }));
+    m.rotation.x = -Math.PI / 2; m.scale.set(1.9, 1.5, 1); m.visible = false;
+    return m;
   }
   const ringGeo = new T.RingGeometry(0.9, 1.25, 32);
 
@@ -143,79 +125,68 @@
   class Combat {
     constructor(game) {
       this.name = 'combat'; this.g = game;
-      const S = game.scene;
       this.drones = [buildHornet(), buildHornet()];
       this.biker = buildBiker();
       this.boss = buildBoss();
-      this.shots = Array.from({ length: 10 }, buildLemonShot);
+      this.shots = Array.from({ length: 8 }, buildLemonShot);
       this.bombMeshes = Array.from({ length: 5 }, buildJuiceBomb);
-      this.rings = Array.from({ length: 5 }, () => {
+      this.rings = Array.from({ length: 6 }, () => {
         const m = new T.Mesh(ringGeo, new T.MeshBasicMaterial({ color: new T.Color(2.4, 0.3, 0.2), transparent: true, opacity: 0.8, depthWrite: false, fog: false, side: T.DoubleSide }));
         m.rotation.x = -Math.PI / 2; m.visible = false; return m;
       });
-      this.peels = [buildPeel(), buildPeel(), buildPeel()];
-      const slickMat = new T.MeshBasicMaterial({ color: 0xffe14a, transparent: true, opacity: 0.55, depthWrite: false });
-      this.slickMesh = new T.Mesh(new T.CircleGeometry(1, 32), slickMat);
-      this.slickMesh.rotation.x = -Math.PI / 2; this.slickMesh.scale.set(VR.HALF_TRACK, 2.2, 1); this.slickMesh.visible = false;
-      this.aura = new T.Group();
-      for (let i = 0; i < 2; i++) {
-        const t = new T.Mesh(new T.TorusGeometry(0.85, 0.035, 8, 40), new T.MeshBasicMaterial({ color: new T.Color(0.4, 2.2, 2.6), transparent: true, opacity: 0.85, depthWrite: false, fog: false }));
-        t.rotation.x = Math.PI / 2 + i * 0.9; this.aura.add(t);
-      }
-      this.aura.visible = false;
+      this.puddles = Array.from({ length: 22 }, buildPuddle);
       this.goat = VR.buildGoat ? VR.buildGoat() : new T.Group();
       if (this.goat.userData.mk) this.goat.userData.mk.visible = false;
       this.goat.visible = false;
-      S.add(...this.drones, this.biker, this.boss, ...this.shots, ...this.bombMeshes, ...this.rings, ...this.peels, this.slickMesh, this.aura, this.goat);
-      this.item = null;
+      game.scene.add(...this.drones, this.biker, this.boss, ...this.shots, ...this.bombMeshes, ...this.rings, ...this.puddles, this.goat);
       this.clearAll();
       UI.addStrings({
-        cbBox: 'صندوق مفاجآت', cbTip: 'اضغط الزر 👇 عشان تستخدمه', cbUse: 'استخدم',
-        cbDroneWarn: '🎯 درون! بدّل خطك أو اضربه', cbBikerWarn: '🏍️ موتوسيكل وراك!', cbDodge: 'تفادي!',
-        cbKnockDrone: 'وقّعت الدرون!', cbKnockBiker: 'وقّعت الموتوسيكل!', cbStomp: 'دعسة! 🦶',
-        cbBossIn: 'الدرون الكبير وصل! 🛸', cbBossName: 'درون زهران الكبير', cbBossDown: 'هزمت الدرون الكبير!', cbBossAway: 'الدرون الكبير هرب…', cbBossCoop: 'اضربوه مع بعض! 🤝', cbAmmo: 'ذخيرة ليمون مجانية!',
-        cbSlickDozer: 'الجرّافة تزحلقت! 🥤', cbSlipped: 'تزحلقت! 🍌',
-        cbBombHit: '💦 {n} رشّك!', cbBombBack: '🪞 رجّعتله القنبلة!', cbBombBounced: '💦 قنبلتك رجعتلك!', cbBombThrow: '💦 رميت قنبلة!',
-        cbPeelDrop: '🍌 رميت قشرة موز', cbPeelBlocked: '🪞 المراية كسرت القشرة',
-        cbSwapDone: '🔄 بدّلت مع {n}!', cbSwapGot: '🔄 {n} بدّل معك!', cbSwapNo: '🪞 {n} صدّ التبديل',
-        cbReflectOn: '🪞 المراية شغّالة', cbReflectUsed: '🪞 المراية صدّت!',
-        cbGoat: 'مشمش جاي! 🐐', cbPulse: 'نبضة! 🧲', cbDash: 'اندفاعة! ⚡',
+        cbThrow: 'ارمي ليمونة', cbTip: '🍋 اضغط الزر وارمي ليمونة!', cbNoLemon: 'ما معك ليمون! 🍋',
+        cbDroneWarn: '🎯 درون! بدّل خطك أو ارميه', cbBikerWarn: '🏍️ موتوسيكل وراك!', cbDodge: 'تفادي!',
+        cbKnockDrone: 'وقّعت الدرون!', cbKnockBiker: 'وقّعت الموتوسيكل!', cbSteal: 'أخدت موتوسيكله! 🛵', cbMagnet: '🧲 المغناطيس سحب الدرون!',
+        cbBossIn: 'الدرون الكبير وصل! 🛸', cbBossName: 'درون زهران الكبير', cbBossDown: 'هزمت الدرون الكبير!', cbBossAway: 'الدرون الكبير هرب…',
+        cbBossCoop: 'اضربوه مع بعض! 🤝', cbBossTip: 'كل قنبلة بتترك ليمونة 🍋',
+        cbTrail: 'تزحلق ع الليموناضة! 🥤', cbDozerSlip: 'الجرّافة بتتزحلق! 🥤',
+        cbHitFriend: 'صبته! 🎯', cbMissFriend: 'فلت منك!', cbGotHit: '🍋 {n} صابك!', cbIncoming: '🍋 ليمونة جاية!', cbSlipFriend: '🥤 تزحلقت ع ليموناضة {n}!',
       }, {
-        cbBox: 'Mystery box', cbTip: 'Tap the button 👇 to use it', cbUse: 'Use',
-        cbDroneWarn: '🎯 Drone! Dodge or sling it', cbBikerWarn: '🏍️ Biker behind you!', cbDodge: 'Dodged!',
-        cbKnockDrone: 'Drone down!', cbKnockBiker: 'Biker down!', cbStomp: 'Stomp! 🦶',
-        cbBossIn: 'The mega-drone is here! 🛸', cbBossName: 'Zahran’s mega-drone', cbBossDown: 'Mega-drone defeated! 🎉', cbBossAway: 'The mega-drone got away…', cbBossCoop: 'Hit it together! 🤝', cbAmmo: 'Free lemon ammo!',
-        cbSlickDozer: 'The bulldozer slipped! 🥤', cbSlipped: 'Slipped! 🍌',
-        cbBombHit: '💦 {n} splashed you!', cbBombBack: '🪞 Bounced the bomb back!', cbBombBounced: '💦 Your bomb came back!', cbBombThrow: '💦 Juice bomb away!',
-        cbPeelDrop: '🍌 Dropped a banana peel', cbPeelBlocked: '🪞 The mirror broke the peel',
-        cbSwapDone: '🔄 Swapped with {n}!', cbSwapGot: '🔄 {n} swapped with you!', cbSwapNo: '🪞 {n} blocked the swap',
-        cbReflectOn: '🪞 Mirror on', cbReflectUsed: '🪞 Blocked!',
-        cbGoat: 'Go Mishmish! 🐐', cbPulse: 'Pulse! 🧲', cbDash: 'Dash! ⚡',
+        cbThrow: 'Throw a lemon', cbTip: '🍋 Tap the button to throw a lemon!', cbNoLemon: 'No lemons! 🍋',
+        cbDroneWarn: '🎯 Drone! Dodge or hit it', cbBikerWarn: '🏍️ Biker behind you!', cbDodge: 'Dodged!',
+        cbKnockDrone: 'Drone down!', cbKnockBiker: 'Biker down!', cbSteal: 'You took his scooter! 🛵', cbMagnet: '🧲 Magnet grabbed the drone!',
+        cbBossIn: 'The mega-drone is here! 🛸', cbBossName: 'Zahran’s mega-drone', cbBossDown: 'Mega-drone down!', cbBossAway: 'The mega-drone got away…',
+        cbBossCoop: 'Hit it together! 🤝', cbBossTip: 'Every bomb leaves a lemon 🍋',
+        cbTrail: 'Slipped on lemonade! 🥤', cbDozerSlip: 'The bulldozer is slipping! 🥤',
+        cbHitFriend: 'Direct hit! 🎯', cbMissFriend: 'Missed!', cbGotHit: '🍋 {n} got you!', cbIncoming: '🍋 Lemon incoming!', cbSlipFriend: '🥤 Slipped on {n}’s lemonade!',
       });
       window.addEventListener('keydown', (e) => {
         const t = e.target; if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA')) return;
-        if ((e.code === 'KeyE' || e.code === 'KeyF' || e.code === 'Enter') && this.g.state === 'playing') { e.preventDefault(); this.use(); }
+        if ((e.code === 'KeyE' || e.code === 'KeyF' || e.code === 'Enter') && this.g.state === 'playing') { e.preventDefault(); this.throwLemon(); }
       });
     }
 
     bind() {
       const hud = document.getElementById('hud') || document.body;
       const add = (html, parent) => { const d = document.createElement('div'); d.innerHTML = html; const el = d.firstElementChild; parent.appendChild(el); return el; };
-      this.btn = add(`<button id="cbBtn" class="cb-btn" hidden aria-label="Item"><span class="cb-ic"></span><b class="cb-n"></b></button>`, hud);
-      this.warnEl = add(`<div id="cbWarn" class="cb-warn" hidden>🏍️ ⚠️</div>`, hud);
+      this.btn = add(`<button id="cbBtn" class="cb-btn" hidden aria-label="Throw"><span class="cb-ic">🍋</span><b class="cb-n"></b></button>`, hud);
+      this.aim = add(`<div id="cbAim" class="cb-aim" hidden></div>`, hud);
+      this.warnEl = add(`<div id="cbWarn" class="cb-warn" hidden></div>`, hud);
       this.bossBar = add(`<div id="cbBoss" class="cb-boss" hidden><span></span><i><b></b></i></div>`, hud);
-      this.splat = add(`<div id="cbSplat" class="cb-splat" hidden>${Array.from({ length: 7 }, () => '<i></i>').join('')}</div>`, document.body);
+      this.splat = add(`<div id="cbSplat" class="cb-splat" hidden>${Array.from({ length: 6 }, () => '<i></i>').join('')}</div>`, document.body);
       const st = document.createElement('style');
       st.textContent = `
-        .cb-btn{position:fixed;right:calc(14px + var(--safe-r, 0px));bottom:calc(22px + var(--safe-b, 0px));width:78px;height:78px;border-radius:50%;border:3px solid #ffd23f;
-          background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.28),rgba(16,20,34,.82) 60%);box-shadow:0 6px 18px rgba(0,0,0,.35),0 0 0 4px rgba(255,210,63,.18);pointer-events:auto;
-          display:grid;place-items:center;cursor:pointer;touch-action:none;z-index:6;padding:0;-webkit-tap-highlight-color:transparent}
-        .cb-btn[hidden]{display:none}.cb-btn .cb-ic{font-size:38px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
-        .cb-btn .cb-n{position:absolute;top:-4px;left:-4px;min-width:26px;height:26px;border-radius:13px;background:#e8433a;color:#fff;font:800 15px/26px system-ui,sans-serif;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.4)}
-        .cb-btn .cb-n:empty{display:none}.cb-btn.new{animation:cbNew .6s cubic-bezier(.2,.9,.3,1.5)}.cb-btn.pvp{border-color:#ff6fd8}.cb-btn:active{transform:scale(.92)}
-        @keyframes cbNew{from{transform:scale(0) rotate(-90deg)}}
-        .cb-warn{position:fixed;left:50%;bottom:calc(26px + var(--safe-b, 0px));transform:translateX(-50%);font-size:26px;padding:4px 14px;border-radius:99px;background:rgba(232,67,58,.85);color:#fff;pointer-events:none;animation:cbBlink .5s steps(2) infinite}
-        .cb-warn[hidden]{display:none}@keyframes cbBlink{50%{opacity:.35}}
+        .cb-btn{position:fixed;right:calc(14px + var(--safe-r, 0px));bottom:calc(22px + var(--safe-b, 0px));width:80px;height:80px;border-radius:50%;border:3px solid #ffd23f;
+          background:radial-gradient(circle at 35% 30%,rgba(255,255,255,.3),rgba(16,20,34,.82) 60%);box-shadow:0 6px 18px rgba(0,0,0,.35),0 0 0 5px rgba(255,210,63,.22);pointer-events:auto;
+          display:grid;place-items:center;cursor:pointer;touch-action:none;z-index:6;padding:0;-webkit-tap-highlight-color:transparent;animation:cbPulse 1s ease-in-out infinite}
+        .cb-btn[hidden]{display:none}.cb-btn .cb-ic{font-size:40px;line-height:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.4))}
+        .cb-btn .cb-n{position:absolute;top:-4px;left:-4px;min-width:26px;height:26px;border-radius:13px;background:#2f8a45;color:#fff;font:800 15px/26px system-ui,sans-serif;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.4)}
+        .cb-btn.empty{filter:grayscale(1) brightness(.7);animation:none}.cb-btn.empty .cb-n{background:#6b7280}.cb-btn:active{transform:scale(.9)}
+        @keyframes cbPulse{50%{box-shadow:0 6px 18px rgba(0,0,0,.35),0 0 0 10px rgba(255,210,63,.1)}}
+        .cb-aim{position:fixed;left:0;top:0;width:54px;height:54px;margin:-27px 0 0 -27px;border:3px solid #ffd23f;border-radius:50%;pointer-events:none;
+          box-shadow:0 0 0 2px rgba(0,0,0,.35),inset 0 0 0 2px rgba(0,0,0,.25);animation:cbAim 0.8s ease-in-out infinite}
+        .cb-aim:before,.cb-aim:after{content:"";position:absolute;background:#ffd23f;left:50%;top:-9px;width:3px;height:70px;margin-left:-1.5px;clip-path:polygon(0 0,100% 0,100% 18%,0 18%,0 82%,100% 82%,100% 100%,0 100%)}
+        .cb-aim:after{transform:rotate(90deg)}.cb-aim[hidden]{display:none}.cb-aim.friend,.cb-aim.friend:before,.cb-aim.friend:after{border-color:#ff6fd8}.cb-aim.friend:before,.cb-aim.friend:after{background:#ff6fd8}
+        @keyframes cbAim{50%{transform:scale(.85) rotate(45deg)}}
+        .cb-warn{position:fixed;left:50%;bottom:calc(26px + var(--safe-b, 0px));transform:translateX(-50%);font-size:22px;font-weight:800;padding:4px 14px;border-radius:99px;background:rgba(232,67,58,.88);color:#fff;pointer-events:none;animation:cbBlink .5s steps(2) infinite;white-space:nowrap}
+        .cb-warn[hidden]{display:none}@keyframes cbBlink{50%{opacity:.4}}
         .cb-boss{position:fixed;top:calc(150px + var(--safe-t, 0px));left:50%;transform:translateX(-50%);width:min(340px,72vw);display:flex;flex-direction:column;align-items:center;gap:4px;pointer-events:none}
         .cb-boss[hidden]{display:none}.cb-boss span{font-weight:900;color:#fff;text-shadow:0 2px 4px rgba(0,0,0,.6);font-size:14px}
         .cb-boss i{display:block;width:100%;height:12px;border-radius:99px;background:rgba(0,0,0,.5);overflow:hidden;box-shadow:0 0 0 2px rgba(255,255,255,.25)}
@@ -231,17 +202,16 @@
           radial-gradient(circle at 28% 78%,var(--j) 0 9%,transparent 10%),
           radial-gradient(circle at 92% 38%,var(--j) 0 4%,transparent 5%),
           radial-gradient(circle at 8% 60%,var(--j) 0 4%,transparent 5%),
-          linear-gradient(var(--j),var(--j)) 49% 60%/7% 40% no-repeat}
-`;
+          linear-gradient(var(--j),var(--j)) 49% 60%/7% 40% no-repeat}`;
       document.head.appendChild(st);
-      const fire = (e) => { e.preventDefault(); e.stopPropagation(); this.use(); };
+      const fire = (e) => { e.preventDefault(); e.stopPropagation(); this.throwLemon(); };
       this.btn.addEventListener('touchstart', fire, { passive: false });
       this.btn.addEventListener('mousedown', fire);
-      // a quick tap on the game (not a swipe) also uses the item
+      // a quick tap on the game (not a swipe) also throws, but only when there is something to hit
       const el = document.getElementById('game');
       let t0 = 0, x0 = 0, y0 = 0;
       const down = (x, y) => { t0 = performance.now(); x0 = x; y0 = y; };
-      const up = (x, y) => { if (performance.now() - t0 < 260 && Math.hypot(x - x0, y - y0) < 14 && this.g.state === 'playing') this.use(); };
+      const up = (x, y) => { if (performance.now() - t0 < 260 && Math.hypot(x - x0, y - y0) < 14 && this.g.state === 'playing' && this.target) this.throwLemon(); };
       if (el) {
         el.addEventListener('touchstart', (e) => { const t = e.changedTouches[0]; down(t.clientX, t.clientY); }, { passive: true });
         el.addEventListener('touchend', (e) => { const t = e.changedTouches[0]; up(t.clientX, t.clientY); });
@@ -250,293 +220,233 @@
       }
     }
 
-    warm(on) { for (const m of [...this.drones, this.biker, this.boss, this.shots[0], this.bombMeshes[0], this.peels[0], this.goat]) m.visible = on; }
+    warm(on) { for (const m of [...this.drones, this.biker, this.boss, this.shots[0], this.bombMeshes[0], this.puddles[0], this.goat]) m.visible = on; }
     clearAll() {
-      this.enemies = []; this.planned = []; this.projectiles = []; this.bombs = []; this.peelList = [];
-      this.slick = null; this.goatRun = null; this.reflectT = 0; this.slipT = 0; this.cool = 0;
-      this.bossS = null; this.pendingHits = 0; this.swapWait = 0;
-      if (this.splat) { this.splat.hidden = true; this.splatLeft = 0; }
-      for (const m of [...this.drones, this.biker, this.boss, ...this.shots, ...this.bombMeshes, ...this.rings, ...this.peels, this.slickMesh, this.aura, this.goat]) if (m) m.visible = false;
+      this.enemies = []; this.planned = []; this.projectiles = []; this.bombs = []; this.trail = []; this.frTrail = []; this.incoming = [];
+      this.goatRun = null; this.slipT = 0; this.cool = 0; this.target = null; this.trailAcc = 0; this.trailSend = 0;
+      this.bossS = null; this.pendingHits = 0;
+      for (const m of [...this.drones, this.biker, this.boss, ...this.shots, ...this.bombMeshes, ...this.rings, ...this.puddles, this.goat]) if (m) m.visible = false;
       if (this.warnEl) this.warnEl.hidden = true;
       if (this.bossBar) this.bossBar.hidden = true;
+      if (this.btn) this.btn.hidden = true;
+      if (this.aim) this.aim.hidden = true;
+      if (this.splat) { this.splat.hidden = true; this.splatLeft = 0; }
     }
-    reset() { this.clearAll(); this.setItem(null); }
+    reset() { this.clearAll(); }
 
     // ------------------------------------------------------------ run lifecycle
     runStart(opts) {
-      this.clearAll(); this.setItem(null);
-      const g = this.g, mode = opts.mode || 'endless';
+      this.clearAll();
+      const mode = opts.mode || 'endless';
       this.seed = opts.seed != null ? opts.seed : (Math.random() * 1e9) | 0;
-      const P = g.S.party, coop = mode === 'party' && opts.party === 'coop';
+      const coop = mode === 'party' && opts.party === 'coop';
       this.race = mode === 'party' && !coop;
       this.coop = coop;
-      this.boxesOn = true;
       const lvl = mode === 'story' && VR.STORY ? VR.STORY.find(l => l.id === opts.level) : null;
       this.enemiesOn = mode !== 'story' || (lvl && lvl.id >= 5);
       this.enemyRate = mode === 'story' ? 0.45 : 1;
       this.bossOn = mode === 'endless' || mode === 'daily' || coop;
       this.nextBossAt = coop ? 900 : 1100;
-      this.tipShown = UI.store.get('cbTip', false);
+      this.tipShown = UI.store.get('cbTip2', false);
       this.warnedDrone = this.warnedBiker = false;
+      this.trailToast = false;
     }
-    leaveRun() { this.clearAll(); this.setItem(null); }
-    runEnd() { if (this.warnEl) this.warnEl.hidden = true; }
+    leaveRun() { this.clearAll(); }
+    runEnd() { if (this.warnEl) this.warnEl.hidden = true; if (this.btn) this.btn.hidden = true; if (this.aim) this.aim.hidden = true; }
     state(s) {
-      if (s === 'partyWait' || s === 'menu') { const it = this.item, B = this.bossS; this.clearAll(); if (s === 'menu') this.setItem(null); else { this.item = it; this.bossS = B; } }
-      if (this.btn) this.btn.hidden = !(this.item && (s === 'playing' || s === 'paused' || s === 'resuming')); if (s !== 'playing' && this.warnEl) this.warnEl.hidden = true; }
+      // spectating a friend moves the world around: drop my enemies (keep a co-op boss fight going)
+      if (s === 'partyWait' || s === 'menu') { const B = this.bossS; this.clearAll(); if (s !== 'menu') this.bossS = B; }
+      if (s !== 'playing') { if (this.btn) this.btn.hidden = true; if (this.aim) this.aim.hidden = true; if (this.warnEl) this.warnEl.hidden = true; }
+    }
     shift(dz) {
       for (const e of this.enemies) e.z += dz;
       for (const e of this.planned) e.z += dz;
       for (const s of this.projectiles) { s.z += dz; s.m.position.z = s.z; }
       for (const b of this.bombs) { b.z += dz; b.sz += dz; }
-      for (const p of this.peelList) { p.z += dz; p.m.position.z = p.z; }
-      if (this.slick) { this.slick.z += dz; this.slickMesh.position.z = this.slick.z; }
-      if (this.goatRun) this.goatRun.z += dz;
+      for (const t of this.trail) { t.z += dz; if (t.m) t.m.position.z = t.z; }
+    }
+    // power-ups with a combat job
+    powerUp(type) {
+      if (type === 'goat') this.whistle();
     }
 
-    // ------------------------------------------------------------ world content (seeded per chunk)
+    // ------------------------------------------------------------ enemies are seeded per chunk
     chunk(chunk, plan) {
       const g = this.g;
       if (!g.runOpts || g.state === 'menu') return;
       const rnd = VR.rng(((this.seed | 0) * 977 + chunk.id * 131 + 7) >>> 0);
-      const r1 = rnd(), r2 = rnd(), r3 = rnd(), r4 = rnd(), r5 = rnd();
-      if (!plan || chunk.id < 4 || plan.patternName === 'safe') return;
-      // item box: takes the place of one of the chunk's coins (always on a reachable line)
-      if (this.boxesOn && r1 < 0.3 && plan.coins.length > 5) {
-        const c = plan.coins[2 + ((r2 * (plan.coins.length - 4)) | 0)];
-        const x = c.x * LW, z = chunk.z0 - c.z;
-        g.collect.removeCoinAt(x, c.y, z);
-        g.collect.spawnPowerUp('box', x, Math.max(1.0, c.y), z, chunk.id);
-        this.boxesSpawned = (this.boxesSpawned || 0) + 1;
-      }
-      if (this.enemiesOn && chunk.id >= 9) {
-        const diff = g.difficultyAt(g.distance + (g.player.z - chunk.z0));
-        if (r3 < (0.16 + diff * 0.2) * this.enemyRate) this.planned.push({ type: r4 < 0.56 ? 'drone' : 'biker', z: chunk.z0 - 10 - r5 * 20, lane: ((r5 * 3) | 0) - 1 });
-      }
+      const r3 = rnd(), r4 = rnd(), r5 = rnd();
+      if (!plan || plan.patternName === 'safe' || !this.enemiesOn || chunk.id < 9) return;
+      const diff = g.difficultyAt(g.distance + (g.player.z - chunk.z0));
+      if (r3 < (0.16 + diff * 0.2) * this.enemyRate) this.planned.push({ type: r4 < 0.56 ? 'drone' : 'biker', z: chunk.z0 - 10 - r5 * 20, lane: ((r5 * 3) | 0) - 1 });
     }
 
-    // ------------------------------------------------------------ pickups
-    pickPowerUp(type, x, y, z) {
-      if (type !== 'box') return false;
+    // ------------------------------------------------------------ lemons = ammo
+    ammo() {
       const g = this.g;
-      g.score += C.POWERUP_POINTS * g.multiplier;
-      g.fx.sparkle(x, y, z, 0xff6fd8, 26, 6, -g.speed * 0.9);
-      g.fx.ring(x, y, z, 0xff6fd8, 18, 5);
-      g.fxFlash = 0.3; VR.Audio.play('powerup'); g.vibrate(20);
-      if (this.bossS) { this.giveAmmo(6); return true; }
-      const id = this.roll();
-      this.setItem(id, ITEMS[id].n);
-      const nm = UI.lang === 'ar' ? ITEMS[id].ar : ITEMS[id].en;
-      UI.toast(`${ITEMS[id].e} ${nm}${ITEMS[id].n > 1 ? ' ×' + ITEMS[id].n : ''}`, 1200, true);
-      if (!this.tipShown) { this.tipShown = true; UI.store.set('cbTip', true); setTimeout(() => { if (g.state === 'playing') UI.toast(UI.t('cbTip'), 1800, true); }, 1300); }
-      return true;
+      if (g.powerups.active('lemonade')) return g.powerups.remaining('lemonade') > 1.6 ? Infinity : 0;
+      return g.lemons;
     }
-    friend() {
-      const P = this.g.S.party;
-      if (!P || !P.inRun || !P.fr || P.fDead || P.frGone) return null;
-      return { d: P.dS != null ? P.dS : P.fDist, name: P.frName || '' };
+    spendLemon() {
+      const g = this.g, pu = g.powerups;
+      if (pu.active('lemonade')) { pu.timers.lemonade = Math.max(0.05, pu.remaining('lemonade') - 1.5); return; }  // a rush pays in seconds
+      g.lemons = Math.max(0, g.lemons - 1);
+      UI.lemons(g.lemons, g.lemonNeed, 0);
     }
-    chaser() {
-      const d = this.g.S.story && this.g.S.story.active && this.g.S.story.dz;
-      return (d && d.on && !d.caught) || this.enemies.some(e => e.type === 'biker' && !e.down && e.phase === 'approach');
-    }
-    roll() {
-      const W = { sling: 3, whistle: 1.1, pulse: 1, dash: 1.1 };
-      if (this.chaser()) W.slick = 2.6;
-      const f = this.race && this.friend();
-      if (f) {
-        const lead = this.g.distance - f.d;
-        W.bomb = 1.5; W.reflect = 0.9;
-        if (lead > 5) W.peel = 1.5;
-        if (lead < -30) W.swap = lead < -120 ? 2.4 : 1.2;
-      }
-      const tot = Object.values(W).reduce((a, b) => a + b, 0);
-      let r = Math.random() * tot;
-      for (const k in W) { r -= W[k]; if (r <= 0) return k; }
-      return 'sling';
-    }
-    setItem(id, n) {
-      this.item = id ? { id, n: n || 1 } : null;
-      if (!this.btn) return;
-      this.btn.hidden = !this.item || this.g.state !== 'playing';
-      if (!this.item) return;
-      this.btn.querySelector('.cb-ic').textContent = ITEMS[id].e;
-      this.btn.querySelector('.cb-n').textContent = this.item.n > 1 ? this.item.n : '';
-      this.btn.classList.toggle('pvp', !!ITEMS[id].pvp);
-      this.btn.classList.remove('new'); void this.btn.offsetWidth; this.btn.classList.add('new');
-    }
-    giveAmmo(n) {
-      const cur = this.item && this.item.id === 'sling' ? this.item.n : 0;
-      if (!this.item || this.item.id === 'sling') { this.item = { id: 'sling', n: Math.min(9, cur + n) }; this.setItemQuiet(); }
-    }
-    setItemQuiet() {
-      if (!this.btn || !this.item) return;
-      this.btn.hidden = this.g.state !== 'playing';
-      this.btn.querySelector('.cb-ic').textContent = ITEMS[this.item.id].e;
-      this.btn.querySelector('.cb-n').textContent = this.item.n > 1 ? this.item.n : '';
-      this.btn.classList.toggle('pvp', !!ITEMS[this.item.id].pvp);
-    }
-
-    // ------------------------------------------------------------ using items
-    use() {
-      const g = this.g;
-      if (g.state !== 'playing' || !this.item || this.cool > 0) return;
-      const it = this.item, id = it.id;
-      let ok = true;
-      switch (id) {
-        case 'sling': this.fire(); this.cool = 0.2; break;
-        case 'slick': this.dropSlick(); break;
-        case 'whistle': this.whistle(); break;
-        case 'pulse': this.pulse(); break;
-        case 'dash': this.dash(); break;
-        case 'bomb': ok = this.sendAttack('bomb'); break;
-        case 'peel': this.dropPeel(); break;
-        case 'swap': ok = this.askSwap(); break;
-        case 'reflect': this.reflectT = 12; UI.toast(UI.t('cbReflectOn'), 1100, true); VR.Audio.play('ding'); break;
-      }
-      if (!ok) return;
-      it.n--;
-      if (it.n <= 0) { this.item = null; if (this.btn) this.btn.hidden = true; } else this.setItemQuiet();
-    }
-    fire() {
+    // what a thrown lemon would go for right now (null = nothing worth a lemon)
+    findTarget() {
       const g = this.g, p = g.player;
+      const B = this.bossS;
+      if (B && B.hp > 0 && B.in) return { kind: 'boss' };
+      let best = null, bestScore = 1e9;
+      for (const e of this.enemies) {
+        if (e.down) continue;
+        const ahead = p.z - e.z;
+        if (ahead < 2 || ahead > 55) continue;
+        if (e.type === 'biker' && e.phase === 'approach') continue;
+        const score = ahead + Math.abs(e.x - p.x) * 6;     // your lane first
+        if (score < bestScore) { bestScore = score; best = { kind: 'enemy', e }; }
+      }
+      const th = g.S.thief;
+      if (th && th.active && th.skin === 'drone' && !th.escaping && !th.ally && th.gap < 50) {
+        const score = th.gap + Math.abs(th.x - p.x) * 6;
+        if (score < bestScore) { bestScore = score; best = { kind: 'thief' }; }
+      }
+      if (!best && this.race) {
+        const P = g.S.party, f = this.friendPos();
+        if (f && f.ahead > 3 && f.ahead < 45 && P.av && P.av.rig && P.av.rig.root.visible) best = { kind: 'friend', f };
+      }
+      return best;
+    }
+    friendPos() {
+      const g = this.g, P = g.S.party;
+      if (!P || !P.inRun || !P.fr || P.fDead || P.frGone || P.dS == null || !P.av) return null;
+      const r = P.av.rig && P.av.rig.root;
+      return { ahead: P.dS - g.distance, x: r ? r.position.x : 0, z: g.player.z - (P.dS - g.distance), y: r ? r.position.y : 0 };
+    }
+    throwLemon() {
+      const g = this.g, p = g.player;
+      if (g.state !== 'playing' || this.cool > 0) return;
+      const tg = this.target || this.findTarget();
+      if (!tg) return;
+      if (this.ammo() <= 0) { UI.toast(UI.t('cbNoLemon'), 800); VR.Audio.play('denied'); this.cool = 0.4; return; }
       const s = this.shots.find(m => !m.visible); if (!s) return;
+      this.spendLemon();
+      this.cool = 0.22;
       s.visible = true;
-      const shot = { m: s, x: p.x, y: p.y + 1.25, z: p.z - 0.7, lane: p.lane, t: 0, homing: null };
-      // aim assist: the boss, or the nearest enemy ahead in your lane
-      if (this.bossS && this.bossS.hp > 0) shot.homing = 'boss';
-      else {
-        let best = null;
-        for (const e of this.enemies) if (!e.down && e.z < p.z && p.z - e.z < 60 && Math.abs(e.x - p.x) < LW * 0.6 && (!best || e.z > best.z)) best = e;
-        const th = g.S.thief;
-        if (th && th.active && th.skin === 'drone' && !th.escaping) { const tz = p.z - Math.max(0.6, th.gap); if (Math.abs(th.x - p.x) < LW * 0.6 && (!best || tz > best.z)) best = { thief: true }; }
-        shot.homing = best;
+      const shot = { m: s, x: p.x, y: p.y + 1.25, z: p.z - 0.7, t: 0, tg };
+      if (tg.kind === 'friend') {                 // a lob at the lane he is in now: he can still dodge it
+        shot.fx = tg.f.x; shot.T = 0.9; shot.z0 = shot.z; shot.x0 = shot.x;
+        this.send({ k: 'lm', x: Math.round(tg.f.x * 100) / 100, T: shot.T });
       }
       s.position.set(shot.x, shot.y, shot.z);
       this.projectiles.push(shot);
-      VR.Audio.play('throw', { pan: 0 });
+      VR.Audio.play('throw');
       g.cameraImpulse(0.03);
     }
-    dropSlick() {
-      const g = this.g, p = g.player;
-      this.slick = { z: p.z + 1.2, t: 10 };
-      this.slickMesh.position.set(0, 0.04 + (p.onTopOf ? 0 : 0), this.slick.z); this.slickMesh.visible = true;
-      g.fx.sparkle(p.x, 0.4, p.z + 1, 0xffe14a, 30, 4); VR.Audio.play('splat');
-      const st = g.S.story, d = st && st.active && st.dz;
-      if (d && d.on && !d.caught) { d.gap = 13; UI.toast(UI.t('cbSlickDozer'), 1500, true); g.fx.dust(p.x, 0.3, p.z + 5, 12, 0xffe14a, 1.6); }
-    }
-    whistle() {
-      const g = this.g, p = g.player;
-      this.goatRun = { t: 7, x: p.x + (p.lane === 1 ? -1.2 : 1.2), y: 0, vy: 0, z: p.z + 2, gap: -2, ph: 0, leave: 0 };
-      this.goat.visible = true;
-      VR.Audio.play('whistle'); setTimeout(() => VR.Audio.play('baa'), 250);
-      UI.toast(UI.t('cbGoat'), 1300, true);
-    }
-    pulse() {
-      const g = this.g, p = g.player;
-      for (const e of this.enemies) if (!e.down && Math.abs(e.z - p.z) < 60) this.knock(e);
-      if (this.bossS && this.bossS.hp > 0 && this.bossS.in) this.hitBoss(3, true);
-      const th = g.S.thief;
-      if (th && th.active && th.skin === 'drone' && th.gap < 40) th.catch(p.z - Math.max(0.6, th.gap));
-      const coins = g.collect.coins;
-      for (const i of coins.active) { const c = coins.items[i]; if (c.z < p.z + 2 && p.z - c.z < 20) c.magnet = true; }
-      for (let k = 0; k < 3; k++) setTimeout(() => g.fx.ring(p.x, p.y + 1, p.z, k === 1 ? 0xffffff : 0x6fd8ff, 34, 9 + k * 3), k * 90);
-      g.fxFlash = 0.6; g.fxCA = 0.8; g.shake = Math.max(g.shake, 0.2);
-      VR.Audio.play('zap'); g.vibrate(40);
-      UI.toast(UI.t('cbPulse'), 900, true);
-    }
-    dash() {
-      const g = this.g, p = g.player, pu = g.powerups;
-      pu.timers.boost = Math.max(pu.remaining('boost'), 1.6); (pu.full || (pu.full = {})).boost = 1.6;
-      pu.timers.invincible = Math.max(pu.remaining('invincible'), 1.9); pu.full.invincible = 1.9;
-      g.speed *= 1.25;
-      g.cameraImpulse(-0.45); g.fxFlash = 0.35; g.fxCA = 0.8;
-      g.fx.ring(p.x, p.y + 1, p.z, 0xffb347, 26, 7);
-      VR.Audio.play('whoosh'); VR.Audio.play('zap');
-      UI.toast(UI.t('cbDash'), 800, true);
-    }
 
-    // ------------------------------------------------------------ party mischief
-    send(m) { const P = this.g.S.party; if (P && P.inRun) P.send(Object.assign({ t: 'cb' }, m)); }
-    sendAttack(k) {
-      if (!this.friend()) return false;
-      this.send({ k });
-      if (k === 'bomb') { UI.toast(UI.t('cbBombThrow'), 1000, true); VR.Audio.play('throw'); }
-      return true;
+    // ------------------------------------------------------------ lemonade trail: slippery for anyone behind you
+    updateTrail(dt) {
+      const g = this.g, p = g.player, rush = g.powerups.active('lemonade');
+      if (rush && !p.flying) {
+        this.trailAcc += g.speed * dt;
+        if (this.trailAcc > 2.2) {
+          this.trailAcc = 0;
+          const m = this.puddles.find(q => !q.visible) || this.trail.length && this.trail[0].m;
+          if (m) {
+            this.trail = this.trail.filter(t => t.m !== m);
+            m.visible = true; m.position.set(p.x, p.y + 0.03, p.z + 0.5); m.material.opacity = 0.45; m.rotation.z = Math.random() * 6;
+            this.trail.push({ m, x: p.x, y: p.y, z: p.z + 0.5, t: 7 });
+          }
+        }
+        // online race: tell the friend where my lemonade is
+        if (this.race && (this.trailSend -= dt) <= 0) { this.trailSend = 0.25; this.send({ k: 'tr', d: Math.round(g.distance * 10) / 10, x: Math.round(p.x * 10) / 10 }); }
+        // chasers slip on it
+        const st = g.S.story, d = st && st.active && st.dz;
+        if (d && d.on && !d.caught && d.gap < 13) {
+          d.gap = Math.min(13, d.gap + dt * 6);
+          if (!this.trailToast) { this.trailToast = true; UI.toast(UI.t('cbDozerSlip'), 1300, true); }
+          if (Math.random() < dt * 12) g.fx.dust(p.x + (Math.random() - 0.5) * 3, 0.3, p.z + d.gap - 1, 2, 0xffe14a, 1.2);
+        }
+      } else this.trailToast = false;
+      for (const t of this.trail) {
+        t.t -= dt;
+        t.m.material.opacity = 0.45 * Math.min(1, t.t / 2);
+        if (t.t <= 0 || t.z - p.z > 45) { t.m.visible = false; t.dead = true; }
+      }
+      this.trail = this.trail.filter(t => !t.dead);
+      // the friend's lemonade, placed on my copy of the railway
+      for (const q of this.frTrail) {
+        q.t -= dt;
+        if (!q.m && q.d > g.distance + 2) {
+          const m = this.puddles.find(x => !x.visible);
+          if (m) { const z = p.z - (q.d - g.distance); m.visible = true; m.position.set(q.x, g.world.surfaceAt(q.x, z, 99, 0.3).h + 0.03, z); m.material.opacity = 0.6; q.m = m; q.z = z; }
+        }
+        if (q.m) {
+          const z = p.z - (q.d - g.distance);
+          if (!q.hit && Math.abs(z - p.z) < 0.9 && Math.abs(q.x - p.x) < 1.6 && !p.flying && p.y < q.m.position.y + 0.4) { q.hit = true; this.slip(UI.t('cbSlipFriend').replace('{n}', this.frName())); }
+          if (p.z - z < -20) q.t = 0;
+        }
+        if (q.t <= 0) { if (q.m) q.m.visible = false; q.dead = true; }
+      }
+      this.frTrail = this.frTrail.filter(q => !q.dead);
     }
-    dropPeel() {
+    slip(msg) {
       const g = this.g, p = g.player;
-      this.placePeel(g.distance - 1.5, p.lane, true);
-      this.send({ k: 'peel', d: Math.round((g.distance - 1.5) * 100) / 100, l: p.lane });
-      UI.toast(UI.t('cbPeelDrop'), 900); VR.Audio.play('pop');
+      if (g.powerups.active('invincible') || g.powerups.active('boost') || p.flying) return;
+      this.slipT = 1.3; p.stumbleAnim = 0.5;
+      UI.toast(msg, 1300, true); VR.Audio.play('slip'); g.shake = Math.max(g.shake, 0.2); g.vibrate(30);
     }
-    placePeel(d, lane, mine) {
-      const g = this.g, m = this.peels.find(x => !x.visible) || this.peels[0];
-      const z = g.player.z - (d - g.distance), x = lane * LW;
-      const y = g.world.surfaceAt(x, z, 99, 0.3).h;
-      m.position.set(x, y + 0.02, z); m.rotation.y = Math.random() * 6; m.visible = true;
-      this.peelList = this.peelList.filter(q => q.m !== m);
-      this.peelList.push({ m, z, lane, y, mine, t: 40 });
-    }
-    askSwap() {
-      const f = this.friend(); if (!f || this.g.distance >= f.d) return false;
-      this.send({ k: 'swap', d: Math.round(this.g.distance * 100) / 100 });
-      this.swapWait = 2.5;
-      return true;
-    }
-    doSwap(D) {
-      const g = this.g, p = g.player, pu = g.powerups;
-      if (g.state !== 'playing') return;
-      for (const e of this.enemies) this.remove(e);
-      this.enemies = []; this.planned = []; this.peelList.forEach(q => q.m.visible = false); this.peelList = [];
-      this.bombs.forEach(b => { b.m.visible = false; b.ring.visible = false; }); this.bombs = [];
-      g.jumpTo(Math.max(0, D));
-      p.y = g.world.surfaceAt(p.x, p.z, 0.2, 0.3).h; p.vy = 0;
-      pu.timers.invincible = Math.max(pu.remaining('invincible'), 2.5); (pu.full || (pu.full = {})).invincible = 2.5;
-      g.hitCooldown = 0.6;
-      g.snapCamera(); g.fxFlash = 0.8; g.fxCA = 1;
-      g.fx.ring(p.x, p.y + 1, p.z, 0xff6fd8, 30, 8);
-      VR.Audio.play('swap');
-      const P = g.S.party; if (P) { P.buf = []; P.dS = null; }
-    }
-    // messages from the friend's phone (party.js forwards every {t:'cb'} here)
+    frName() { const P = this.g.S.party; return (P && P.frName) || ''; }
+
+    // ------------------------------------------------------------ party link
+    send(m) { const P = this.g.S.party; if (P && P.inRun) P.send(Object.assign({ t: 'cb' }, m)); }
     combatNet(m) {
-      const g = this.g, P = g.S.party, name = (P && P.frName) || '';
-      const nm = (k) => UI.t(k).replace('{n}', name);
+      const g = this.g, P = g.S.party;
       if (!P || !P.inRun) return;
-      const playing = g.state === 'playing';
+      const playing = g.state === 'playing', nm = (k) => UI.t(k).replace('{n}', this.frName());
       switch (m.k) {
-        case 'bomb':
+        case 'lm':        // a lemon lobbed at me: land check after its flight time, in whatever lane I am by then
           if (!playing) break;
-          if (this.reflectT > 0 && !m.r) { this.reflectT = 0; this.send({ k: 'bomb', r: 1 }); UI.toast(UI.t('cbBombBack'), 1300, true); VR.Audio.play('mirror'); break; }
-          this.splash(); UI.toast(m.r ? UI.t('cbBombBounced') : nm('cbBombHit'), 1500, true);
+          this.incoming.push({ x: +m.x || 0, t: Math.max(0.3, Math.min(1.5, (+m.T || 0.9) - Math.min(0.25, (P.rtt || 80) / 2000))) });
+          if (this.warnEl) { this.warnEl.textContent = UI.t('cbIncoming'); this.warnEl.hidden = false; }
+          VR.Audio.play('throw');
           break;
-        case 'peel':
-          if (!playing) break;
-          if (this.reflectT > 0) { this.reflectT = 0; UI.toast(UI.t('cbPeelBlocked'), 1300, true); VR.Audio.play('mirror'); break; }
-          if (m.d > g.distance + 2) this.placePeel(m.d, Math.max(-1, Math.min(1, m.l | 0)), false);
-          break;
-        case 'swap':
-          if (!playing) { this.send({ k: 'swapNo' }); break; }
-          if (this.reflectT > 0) { this.reflectT = 0; this.send({ k: 'swapNo', m: 1 }); UI.toast(UI.t('cbReflectUsed'), 1300, true); VR.Audio.play('mirror'); break; }
-          this.send({ k: 'swapOk', d: Math.round(g.distance * 100) / 100 });
-          this.doSwap(m.d); UI.toast(nm('cbSwapGot'), 1600, true);
-          break;
-        case 'swapOk': if (this.swapWait > 0 && playing) { this.swapWait = 0; this.doSwap(m.d); UI.toast(nm('cbSwapDone'), 1600, true); } break;
-        case 'swapNo': this.swapWait = 0; if (m.m) UI.toast(nm('cbSwapNo'), 1500, true); break;
+        case 'lmHit': UI.toast(UI.t('cbHitFriend'), 1000, true); VR.Audio.play('hit'); g.score += 200 * g.multiplier; break;
+        case 'lmMiss': UI.toast(UI.t('cbMissFriend'), 800); break;
+        case 'tr': if (playing && this.frTrail.length < 60) this.frTrail.push({ d: +m.d || 0, x: +m.x || 0, t: 14 }); break;
         case 'bh': if (this.coop) { if (this.bossS && this.bossS.hp > 0) this.hitBoss(m.n || 1, false); else this.pendingHits = Math.min(40, this.pendingHits + (m.n || 1)); } break;
         case 'bd': if (this.coop && this.bossS && this.bossS.hp > 0) { this.bossS.hp = 0; this.bossDefeated(); } break;
       }
+      void nm;
+    }
+    updateIncoming(dt) {
+      const g = this.g, p = g.player;
+      for (const q of this.incoming) {
+        q.t -= dt;
+        if (q.t > 0) continue;
+        q.done = true;
+        const pu = g.powerups;
+        const hit = Math.abs(p.x - q.x) < 1.1 && p.y < 1.6 && !p.flying;
+        if (hit && !pu.active('invincible') && !pu.active('boost')) {
+          if (pu.active('shield')) { pu.consume('shield'); VR.Audio.play('shieldBreak'); UI.toast(UI.t('shieldBroken')); this.send({ k: 'lmMiss' }); continue; }
+          this.splash(); this.slip(UI.t('cbGotHit').replace('{n}', this.frName()));
+          g.fx.sparkle(p.x, p.y + 1.4, p.z, 0xffe14a, 20, 4);
+          this.send({ k: 'lmHit' });
+        } else { this.send({ k: 'lmMiss' }); g.fx.sparkle(q.x, 0.4, p.z - 1, 0xffe14a, 10, 3); VR.Audio.play('splat'); }
+      }
+      this.incoming = this.incoming.filter(q => !q.done);
+      if (this.warnEl && this.warnEl.textContent === UI.t('cbIncoming') && !this.incoming.length) this.warnEl.hidden = true;
     }
     splash() {
       const el = this.splat; if (!el) return;
-      el.querySelectorAll('i').forEach((b, i) => {
+      el.querySelectorAll('i').forEach((b) => {
         const s = 22 + Math.random() * 26;
         b.style.width = s + 'vmin'; b.style.height = s * (0.8 + Math.random() * 0.4) + 'vmin';
         b.style.left = (Math.random() * 90 - 10) + '%'; b.style.top = (Math.random() * 80 - 5) + '%';
         b.style.transform = `rotate(${Math.random() * 360}deg)`;
       });
-      el.hidden = false; el.style.opacity = '0'; this.splatLeft = 3.6;
+      el.hidden = false; el.style.opacity = '0'; this.splatLeft = 2.8;
       VR.Audio.play('splat'); this.g.vibrate([30, 30, 30]);
     }
 
@@ -557,26 +467,29 @@
       UI.hitFlash(); VR.Audio.play('stumble'); UI.toast(UI.t('stumble')); g.vibrate(40);
       return true;
     }
-    knock(e, quiet) {
+    // knocked out: a drone gives its lemon back (plus coins), a biker leaves coins
+    knock(e, quiet, why) {
       if (e.down) return;
       const g = this.g, p = g.player;
-      e.down = true; e.vy = e.type === 'drone' ? 2 : 5; if (e.ring) { e.ring.visible = false; e.ring = null; } e.spin = (Math.random() - 0.5) * 12; e.dt = 0;
+      e.down = true; e.vy = e.type === 'drone' ? 2 : 5; e.spin = (Math.random() - 0.5) * 12; e.dt = 0;
+      if (e.ring) { e.ring.visible = false; e.ring = null; }
       g.fx.smash(e.x, e.y + 0.4, e.z, e.type === 'drone' ? 0x2b2f3a : 0xf2b705);
       g.fx.ring(e.x, e.y + 0.6, e.z, 0xffd23f, 20, 6);
       VR.Audio.play('boom', { pan: (e.x - p.x) / 5 });
       if (quiet) return;
       g.score += 250 * g.multiplier;
-      for (let i = 0; i < 6; i++) g.collect.spawnCoin(e.x, 1.0, Math.min(e.z, p.z - 6) - i * 1.5, null);
-      UI.toast(UI.t(e.type === 'drone' ? 'cbKnockDrone' : 'cbKnockBiker') + ' +250', 1000, true);
+      const zc = Math.min(e.z, p.z - 7);
+      for (let i = 0; i < 5; i++) g.collect.spawnCoin(e.x, 1.0, zc - i * 1.5, null);
+      if (e.type === 'drone') g.collect.spawnGem(p.lane * LW, 1.0, zc - 9, null);
+      UI.toast(why || (UI.t(e.type === 'drone' ? 'cbKnockDrone' : 'cbKnockBiker') + ' +250'), 1000, true);
       g.missions.bump('enemies');
     }
-    remove(e) { e.m.visible = false; e.gone = true; if (e.ring) { e.ring.visible = false; e.ring = null; } if (e.type === 'biker' && this.warnEl) this.warnEl.hidden = true; }
+    remove(e) { e.m.visible = false; e.gone = true; if (e.ring) { e.ring.visible = false; e.ring = null; } if (e.type === 'biker' && this.warnEl && this.warnEl.textContent.includes('🏍')) this.warnEl.hidden = true; }
 
     // ------------------------------------------------------------ per frame
     update(dt) {
       const g = this.g, p = g.player;
       if (this.cool > 0) this.cool -= dt;
-      if (this.swapWait > 0) this.swapWait -= dt;
       this.spawnPlanned();
       this.updateEnemies(dt);
       if (g.state !== 'playing') return;
@@ -584,43 +497,45 @@
       this.updateGoat(dt);
       this.updateBoss(dt);
       if (g.state !== 'playing') return;
-      // lemonade slick behind you
-      if (this.slick) {
-        this.slick.t -= dt;
-        this.slickMesh.material.opacity = 0.55 * Math.min(1, this.slick.t / 1.5);
-        if (this.slick.t <= 0 || this.slick.z - p.z > 40) { this.slick = null; this.slickMesh.visible = false; }
-      }
-      // banana peels
-      for (const q of this.peelList) {
-        q.t -= dt;
-        if (!q.mine && q.m.visible && Math.abs(q.z - p.z) < 0.8 && p.lane === q.lane && !p.flying && p.y < q.y + 0.35) {
-          q.m.visible = false; this.slipT = 1.3; p.stumbleAnim = 0.5;
-          UI.toast(UI.t('cbSlipped'), 1300, true); VR.Audio.play('slip'); g.shake = 0.2; g.vibrate(30);
-        }
-        if (q.t <= 0 || q.z - p.z > 30) q.m.visible = false;
-      }
-      this.peelList = this.peelList.filter(q => q.m.visible);
+      this.updateTrail(dt);
+      this.updateIncoming(dt);
       if (this.slipT > 0) {
         this.slipT -= dt;
         g.speed *= Math.max(0.2, 1 - dt * 2.4);
         p.object.rotation.z = Math.sin(this.slipT * 18) * 0.25 * Math.min(1, this.slipT);
       }
-      // juice on the screen: pops in, drips down and fades
       if (this.splatLeft > 0) {
         this.splatLeft -= dt;
-        const t = 3.6 - this.splatLeft, el = this.splat;
-        el.style.opacity = (t < 0.15 ? t / 0.15 : this.splatLeft < 1.2 ? Math.max(0, this.splatLeft / 1.2) : 1).toFixed(3);
-        el.style.transform = `translateY(${Math.max(0, t - 1.5) * 14}px) scale(${t < 0.15 ? 1.25 - t / 0.15 * 0.25 : 1})`;
+        const t = 2.8 - this.splatLeft, el = this.splat;
+        el.style.opacity = (t < 0.15 ? t / 0.15 : this.splatLeft < 1 ? Math.max(0, this.splatLeft) : 1).toFixed(3);
+        el.style.transform = `translateY(${Math.max(0, t - 1.2) * 14}px) scale(${t < 0.15 ? 1.25 - t / 0.15 * 0.25 : 1})`;
         if (this.splatLeft <= 0) el.hidden = true;
       }
-      // mirror aura
-      if (this.reflectT > 0) {
-        this.reflectT -= dt;
-        this.aura.visible = true; this.aura.position.set(p.x, p.y + 0.95, p.z);
-        this.aura.rotation.y += dt * 3; this.aura.children[1].rotation.z += dt * 2;
-        const k = this.reflectT < 2 ? (Math.sin(this.reflectT * 20) > 0 ? 1 : 0.2) : 1;
-        this.aura.children.forEach(t => t.material.opacity = 0.85 * k);
-      } else this.aura.visible = false;
+      this.updateAim();
+    }
+    // the throw button and the crosshair only show up when there is something to hit
+    updateAim() {
+      const g = this.g;
+      this.target = this.findTarget();
+      const tg = this.target, show = !!tg;
+      if (this.btn.hidden === show) {
+        this.btn.hidden = !show;
+        if (show && !this.tipShown) { this.tipShown = true; UI.store.set('cbTip2', true); UI.toast(UI.t('cbTip'), 1800, true); }
+      }
+      if (!show) { this.aim.hidden = true; return; }
+      const n = this.ammo();
+      this.btn.classList.toggle('empty', n <= 0);
+      const txt = n === Infinity ? '∞' : String(n);
+      const nb = this.btn.querySelector('.cb-n'); if (nb.textContent !== txt) nb.textContent = txt;
+      let x, y, z;
+      if (tg.kind === 'boss') { const B = this.bossS; x = B.x; y = B.y; z = B.z; }
+      else if (tg.kind === 'thief') { const th = g.S.thief; x = th.x; y = th.y + 0.4; z = g.player.z - Math.max(0.6, th.gap); }
+      else if (tg.kind === 'friend') { x = tg.f.x; y = tg.f.y + 1; z = tg.f.z; }
+      else { const e = tg.e; x = e.x; y = e.y + (e.type === 'biker' ? 1.2 : 0); z = e.z; }
+      const [sx, sy] = g.screenPos(x, y, z);
+      this.aim.hidden = false;
+      this.aim.style.left = sx.toFixed(0) + 'px'; this.aim.style.top = sy.toFixed(0) + 'px';
+      this.aim.classList.toggle('friend', tg.kind === 'friend');
     }
 
     spawnPlanned() {
@@ -643,18 +558,18 @@
       m.visible = true; m.userData.beam.visible = false;
       this.enemies.push(e);
       VR.Audio.play('buzz', { pan: (e.x - p.x) / 5 });
-      if (!this.warnedDrone) { this.warnedDrone = true; UI.toast(UI.t('cbDroneWarn'), 2000, true); }
+      if (!this.warnedDrone) { this.warnedDrone = true; UI.toast(UI.t('cbDroneWarn'), 1800, true); }
     }
-    spawnBiker(q) {
+    spawnBiker() {
       const g = this.g, p = g.player;
       const lanes = [-1, 0, 1].filter(l => l !== p.lane);
       const lane = lanes[(Math.random() * lanes.length) | 0];
       const e = { type: 'biker', m: this.biker, lane, x: lane * LW, y: 0, vy: 0, z: p.z + 20, phase: 'approach', t: 0, dust: 0, cutAt: 0 };
       this.biker.visible = true;
       this.enemies.push(e);
-      if (this.warnEl) this.warnEl.hidden = false;
+      if (this.warnEl) { this.warnEl.textContent = '🏍️ ⚠️'; this.warnEl.hidden = false; }
       VR.Audio.play('engine', { pan: (e.x - p.x) / 5 });
-      if (!this.warnedBiker) { this.warnedBiker = true; UI.toast(UI.t('cbBikerWarn'), 1800, true); }
+      if (!this.warnedBiker) { this.warnedBiker = true; UI.toast(UI.t('cbBikerWarn'), 1600, true); }
     }
     laneBlocked(lane, z0, z1) {
       for (const o of this.g.world.obstacles) {
@@ -664,11 +579,11 @@
       return false;
     }
     updateEnemies(dt) {
-      const g = this.g, p = g.player;
+      const g = this.g, p = g.player, magnet = g.powerups.active('magnet');
       for (const e of this.enemies) {
         e.t += dt;
         const U = e.m.userData;
-        if (e.down) {                                             // knocked out: tumble and drop
+        if (e.down) {
           e.dt += dt; e.vy -= 22 * dt; e.y = Math.max(0, e.y + e.vy * dt);
           if (e.type === 'biker') e.z -= (g.speed - 6) * dt;
           e.m.rotation.z += e.spin * dt; e.m.rotation.x += e.spin * 0.4 * dt;
@@ -676,6 +591,10 @@
           e.m.position.set(e.x, e.y, e.z);
           if (e.dt > 1.4 || e.z - p.z > 10) this.remove(e);
           continue;
+        }
+        // a magnet yanks drones out of the sky (they are all metal and electronics)
+        if (magnet && e.type === 'drone' && Math.abs(p.z - e.z) < 20) {
+          g.fx.sparkle(e.x, e.y, e.z, 0xff5a4f, 14, 4); this.knock(e, false, UI.t('cbMagnet')); continue;
         }
         if (e.type === 'drone') this.updateDrone(e, dt, U);
         else this.updateBiker(e, dt, U);
@@ -685,18 +604,18 @@
     updateDrone(e, dt, U) {
       const g = this.g, p = g.player;
       for (const r of U.rotors) r.rotation.y += dt * 45;
-      if (e.phase === 'track') {                       // hover ahead, drift towards your lane
+      if (e.phase === 'track') {
         e.gap += (15 - e.gap) * Math.min(1, dt * 1.5);
         e.relock -= dt;
         if (e.relock <= 0) { e.lane = p.lane; e.relock = 0.9; }
         if (e.t > 2.3) { e.phase = 'lock'; e.t = 0; U.beam.visible = true; VR.Audio.play('tick'); e.ring = this.rings.find(r => !r.visible) || null; if (e.ring) e.ring.visible = true; }
         e.z = p.z - e.gap;
-      } else if (e.phase === 'lock') {                 // red beam on your lane: move!
+      } else if (e.phase === 'lock') {
         e.z = p.z - e.gap;
         U.beam.material.opacity = 0.18 + (Math.sin(e.t * 30) > 0 ? 0.2 : 0);
         if (e.t > 0.65) { e.phase = 'dive'; e.t = 0; VR.Audio.play('buzz'); }
-      } else {                                          // dive along the lane
-        e.z += 16 * dt;                                 // flies back at you (you close in at your own speed too)
+      } else {
+        e.z += 16 * dt;
         U.beam.visible = false;
         const gap = p.z - e.z;
         if (!e.passed && gap < 0.5) {
@@ -720,20 +639,21 @@
     }
     updateBiker(e, dt, U) {
       const g = this.g, p = g.player;
-      let v = g.speed;                                  // world speed of the bike
+      let v = g.speed;
       if (e.phase === 'approach') {
         v = g.speed + 8;
-        if (this.slick && e.z > this.slick.z - 0.5 && e.z - v * dt < this.slick.z) { this.knock(e); return; }
+        // coming up behind you through your lemonade: down it goes
+        if (this.trail.some(t => Math.abs(t.x - e.x) < LW * 1.15 && Math.abs(t.z - e.z) < 1.6)) { this.knock(e, false, UI.t('cbTrail')); return; }
         if (p.z - e.z > 9) { e.phase = 'cut'; e.t = 0; if (this.warnEl) this.warnEl.hidden = true; }
         if (this.laneBlocked(e.lane, e.z - 2, e.z - 16)) { const o = [-1, 0, 1].filter(l => Math.abs(l - e.lane) === 1 && !this.laneBlocked(l, e.z + 2, e.z - 16)); if (o.length) e.lane = o[0]; }
-      } else if (e.phase === 'cut') {                  // swerve into your lane ahead of you
+      } else if (e.phase === 'cut') {
         v = g.speed + 2;
         if (e.t > 0.15 && !e.cutAt) { e.cutAt = 1; if (!this.laneBlocked(p.lane, e.z + 2, e.z - 14)) e.lane = p.lane; VR.Audio.play('engine', { pan: (e.x - p.x) / 5 }); }
         if (e.t > 0.9) { e.phase = 'block'; e.t = 0; }
-      } else if (e.phase === 'block') {                 // brake: you come at it
+      } else if (e.phase === 'block') {
         v = Math.max(4, g.speed - 5.5);
         if (e.t > 1.6 && !e.retarget) { e.retarget = 1; if (!this.laneBlocked(p.lane, e.z + 2, e.z - 12)) e.lane = p.lane; }
-        if (e.t > 6) { e.phase = 'leave'; }
+        if (e.t > 6) e.phase = 'leave';
         if (this.laneBlocked(e.lane, e.z - 1, e.z - 8)) { const o = [-1, 0, 1].filter(l => Math.abs(l - e.lane) === 1 && !this.laneBlocked(l, e.z + 2, e.z - 10)); if (o.length) e.lane = o[(Math.random() * o.length) | 0]; }
       } else v = g.speed + 10;
       e.z -= v * dt;
@@ -741,7 +661,6 @@
       if (e.phase !== 'approach' && e.z - p.z > 14) { this.remove(e); return; }
       const tx = e.lane * LW;
       e.x += Math.sign(tx - e.x) * Math.min(Math.abs(tx - e.x), dt * 7);
-      // ride over whatever is there, hop small things
       const ground = g.world.surfaceAt(e.x, e.z, e.y + 0.5, 0.3).h;
       let low = false;
       for (const o of g.world.obstacles) if (!o.ramp && o.lane === e.lane && o.kind !== 'block' && o.z > e.z - 2 && o.z - o.len < e.z + 0.3) low = true;
@@ -751,12 +670,12 @@
       e.m.rotation.set(0, 0, 0);
       e.m.position.set(e.x, e.y, e.z);
       e.dust -= dt; if (e.dust <= 0) { e.dust = 0.07; g.fx.dust(e.x, e.y + 0.3, e.z + 0.8, 1, 0x9a9a9a, 0.6); }
-      // contact with the runner
       const dz = e.z - p.z;
       if (Math.abs(dz) < 1.0 && Math.abs(e.x - p.x) < 0.9) {
-        if (p.y > e.y + 0.9 && p.vy < 0) {             // landed on top: stomp!
-          this.knock(e); p.vy = 11; p.grounded = false;
-          UI.toast(UI.t('cbStomp'), 900, true); VR.Audio.play('boing');
+        if (p.y > e.y + 0.8 && p.vy < 0) {             // landed on him: stomp, and his scooter is yours
+          this.knock(e, false, UI.t('cbSteal')); p.vy = 11; p.grounded = false;
+          VR.Audio.play('boing');
+          if (!p.flying && !(g.S.vehicles && g.S.vehicles.kind)) g.onPowerUp('bike', p.x, p.y, p.z);
         } else if (p.y < e.y + 1.4) this.hurt(e);
       }
     }
@@ -764,15 +683,23 @@
     updateShots(dt) {
       const g = this.g, p = g.player;
       for (const s of this.projectiles) {
-        const z0 = s.z;
+        const z0 = s.z, tg = s.tg;
         s.t += dt;
+        if (tg.kind === 'friend') {                       // lob towards where he was
+          const f = this.friendPos(), k = Math.min(1, s.t / s.T);
+          const zT = f ? f.z : s.z0 - 20;
+          s.x = s.x0 + (s.fx - s.x0) * k; s.z = s.z0 + (zT - s.z0) * k; s.y = 1.25 + p.y * 0.5 + Math.sin(k * Math.PI) * 2.2;
+          s.m.position.set(s.x, s.y, s.z); s.m.rotation.x += dt * 16;
+          if (k >= 1) { s.dead = true; s.m.visible = false; g.fx.sparkle(s.x, s.y, s.z, 0xffe14a, 12, 3); }
+          continue;
+        }
         s.z -= (g.speed + 48) * dt;
-        let tx = s.lane * LW, ty = 1.25 + p.y * 0;
-        const B = this.bossS, h = s.homing;
-        if (h === 'boss' && B && B.hp > 0) { tx = B.x; ty = B.y; }
-        else if (h && h.thief) { const th = g.S.thief; if (th && th.active) { tx = th.x; ty = th.y + 0.3; } }
-        else if (h && !h.down && !h.gone) { tx = h.x; ty = h.y + (h.type === 'biker' ? 1.1 : 0); }
-        const k = Math.min(1, dt * 10);
+        let tx = s.x, ty = s.y;
+        const B = this.bossS;
+        if (tg.kind === 'boss' && B && B.hp > 0) { tx = B.x; ty = B.y; }
+        else if (tg.kind === 'thief') { const th = g.S.thief; if (th && th.active) { tx = th.x; ty = th.y + 0.3; } }
+        else if (tg.kind === 'enemy' && !tg.e.down && !tg.e.gone) { tx = tg.e.x; ty = tg.e.y + (tg.e.type === 'biker' ? 1.1 : 0); }
+        const k = Math.min(1, dt * 12);
         s.x += (tx - s.x) * k; s.y += (ty - s.y) * k;
         s.m.position.set(s.x, s.y, s.z); s.m.rotation.x += dt * 20;
         if (Math.random() < dt * 40) g.fx.sparkle(s.x, s.y, s.z + 0.2, 0xffe14a, 1, 0.6, 0);
@@ -783,17 +710,14 @@
           if (Math.abs(ey - s.y) < 1.2 && z0 >= e.z - 0.6 && s.z <= e.z + 0.6) { this.knock(e); hit = true; break; }
         }
         const th = g.S.thief;
-        if (!hit && th && th.active && th.skin === 'drone' && !th.escaping) {
+        if (!hit && th && th.active && th.skin === 'drone' && !th.escaping && !th.ally) {
           const tz = p.z - Math.max(0.6, th.gap);
           if (Math.abs(th.x - s.x) < 1.2 && z0 >= tz - 0.6 && s.z <= tz + 0.6) { th.catch(tz); hit = true; }
         }
         if (!hit && B && B.hp > 0 && B.in && Math.abs(B.x - s.x) < 2.8 && z0 >= B.z - 1.5 && s.z <= B.z + 1.5) { this.hitBoss(1, true); hit = true; }
-        if (!hit) for (const o of g.world.obstacles) {
-          if (o.ramp || Math.abs(o.x - s.x) > 1.0) continue;
-          if (!(z0 >= o.z - o.len - 0.3 && s.z <= o.z + 0.3)) continue;
-          if (o.kind === 'block') { if (s.y < VR.TRAIN_HEIGHT + 0.2) { hit = true; g.fx.sparkle(s.x, s.y, o.z, 0xffe14a, 10, 3); VR.Audio.play('splat', { pan: (s.x - p.x) / 5 }); break; } continue; }
-          if (o.moving) continue;
-          g.fx.smash(o.x, 0.5, o.z, 0xd8d2c6); g.world.smash(o); g.score += 50 * g.multiplier; VR.Audio.play('shieldBreak', { pan: (o.x - p.x) / 5 }); hit = true; break;
+        if (!hit) for (const o of g.world.obstacles) {       // a train in the way takes the lemon
+          if (o.kind !== 'block' || Math.abs(o.x - s.x) > 1.0 || s.y > VR.TRAIN_HEIGHT + 0.2) continue;
+          if (z0 >= o.z - o.len - 0.3 && s.z <= o.z + 0.3) { hit = true; VR.Audio.play('splat', { pan: (s.x - p.x) / 5 }); break; }
         }
         if (hit) { g.fx.sparkle(s.x, s.y, s.z, 0xffe14a, 14, 4); VR.Audio.play('hit', { pan: (s.x - p.x) / 5 }); }
         if (hit || p.z - s.z > 75) { s.m.visible = false; s.dead = true; }
@@ -801,18 +725,25 @@
       this.projectiles = this.projectiles.filter(s => !s.dead);
     }
 
+    // ------------------------------------------------------------ Mishmish's bell (a power-up): he charges ahead and clears your lane
+    whistle() {
+      const g = this.g, p = g.player;
+      this.goatRun = { x: p.x + (p.lane === 1 ? -1.2 : 1.2), y: 0, vy: 0, z: p.z + 2, gap: -2, ph: 0, leave: 0 };
+      this.goat.visible = true;
+      VR.Audio.play('whistle'); setTimeout(() => VR.Audio.play('baa'), 250);
+    }
     updateGoat(dt) {
       const R = this.goatRun; if (!R) return;
       const g = this.g, p = g.player, U = this.goat.userData;
-      R.t -= dt; R.ph += dt * (10 + g.speed * 0.25);
+      const on = g.powerups.active('goat');
+      R.ph += dt * (10 + g.speed * 0.25);
       let tx = p.lane * LW;
       R.gap += (6.5 - R.gap) * Math.min(1, dt * 3);
-      if (R.t <= 0) { R.leave += dt; tx = (p.lane <= 0 ? 1 : -1) * LW * 2.2; R.gap += dt * 12; }
+      if (!on) { R.leave += dt; tx = (p.lane <= 0 ? 1 : -1) * LW * 2.2; R.gap += dt * 12; }
       R.z = p.z - R.gap;
       R.x += (tx - R.x) * Math.min(1, dt * 6);
       const lane = Math.round(R.x / LW);
-      // head-butt everything in the way except parked trains (it climbs those)
-      if (R.t > 0) for (const o of [...g.world.obstacles]) {
+      if (on) for (const o of [...g.world.obstacles]) {
         if (o.lane !== lane || o.ramp || (o.kind === 'block' && o.standable)) continue;
         if (o.z > R.z - 2.2 && o.z - o.len < R.z + 0.5) { g.fx.smash(o.x, 0.5, o.z, 0xd8d2c6); g.world.smash(o); VR.Audio.play('shieldBreak', { pan: (o.x - p.x) / 5 }); g.shake = Math.max(g.shake, 0.1); }
       }
@@ -831,7 +762,7 @@
       if (R.leave > 1.2) { this.goatRun = null; this.goat.visible = false; }
     }
 
-    // ------------------------------------------------------------ boss
+    // ------------------------------------------------------------ boss: dodge its juice bombs, pick up the lemon each one leaves, throw it back
     updateBoss(dt) {
       const g = this.g, p = g.player;
       if (!this.bossS) {
@@ -846,18 +777,15 @@
         B.gap += (16 - B.gap) * Math.min(1, dt * (B.in ? 2 : 1.2));
         if (!B.in && B.t > 1.6) { B.in = true; if (this.pendingHits) { const n = this.pendingHits; this.pendingHits = 0; this.hitBoss(n, false); } }
         B.x = Math.sin(B.t * 0.6) * LW * 0.95; B.y = 5.8 + Math.sin(B.t * 1.7) * 0.25 + (B.in ? 0 : (1.6 - B.t) * 3);
-        // free ammo while it's up
-        B.ammo -= dt; if (B.ammo <= 0) { B.ammo = 1.1; if (!this.item || this.item.id === 'sling') this.giveAmmo(1); }
-        // juice bombs on marked lanes
         B.next -= dt;
         if (B.in && B.next <= 0) {
           const frac = B.hp / B.max;
-          B.next = 1.35 + 1.0 * frac;
+          B.next = 1.3 + 0.9 * frac;
           const lane = Math.random() < 0.7 ? p.lane : [-1, 0, 1][(Math.random() * 3) | 0];
           this.dropBomb(lane);
           if (frac < 0.45 && Math.random() < 0.5) this.dropBomb([-1, 0, 1].filter(l => l !== lane)[(Math.random() * 2) | 0]);
         }
-        if (B.t > 55) { B.leaving = true; UI.toast(UI.t('cbBossAway'), 1500); }
+        if (B.t > 60) { B.leaving = true; UI.toast(UI.t('cbBossAway'), 1500); }
       } else {
         B.gap += dt * 25; B.y += dt * 4;
         if (B.gap > 90) { this.endBoss(); return; }
@@ -867,11 +795,10 @@
       U.body.rotation.z = Math.cos(B.t * 0.6) * -0.15; U.body.rotation.x = 0.12;
       if (B.flash > 0) { B.flash -= dt; U.body.position.y = (Math.random() - 0.5) * 0.15; } else U.body.position.y = 0;
       this.bossBar.querySelector('b').style.width = (100 * Math.max(0, B.hp) / B.max).toFixed(1) + '%';
-      // bombs in flight / on the ground
       for (const b of this.bombs) {
         b.t += dt;
         const k = Math.min(1, b.t / b.T);
-        b.m.position.set(b.sx + (b.x - b.sx) * k, b.sy + (0.05 - b.sy) * k + Math.sin(k * Math.PI) * 1.2, b.sz + (b.z - b.sz) * k);
+        b.m.position.set(b.sx + (b.x - b.sx) * k, b.sy + (b.gy + 0.05 - b.sy) * k + Math.sin(k * Math.PI) * 1.2, b.sz + (b.z - b.sz) * k);
         b.m.rotation.x += dt * 6;
         b.ring.position.set(b.x, b.gy + 0.05, b.z);
         const pulse = 1 + Math.sin(b.t * 18) * 0.08;
@@ -880,21 +807,23 @@
           b.done = true; b.m.visible = false; b.ring.visible = false;
           g.fx.smash(b.x, b.gy + 0.2, b.z, 0xffc21a); g.fx.ring(b.x, b.gy + 0.3, b.z, 0xffc21a, 22, 6);
           VR.Audio.play('splat', { pan: (b.x - p.x) / 5 });
-          if (Math.abs(p.x - b.x) < 1.3 && Math.abs(p.z - b.z) < 1.9 && p.y < b.gy + 1.0) this.hurt(null);
+          const inBlast = Math.abs(p.x - b.x) < 1.3 && Math.abs(p.z - b.z) < 1.9 && p.y < b.gy + 1.0;
+          if (inBlast) this.hurt(null);
+          // the bomb's lemon survives the splash: grab it and throw it back
+          g.collect.spawnGem(b.x, b.gy + 1.0, b.z - 2.5, null);
         }
       }
       this.bombs = this.bombs.filter(b => !b.done);
     }
     startBoss() {
-      const g = this.g, max = this.coop ? 28 : 18;
-      this.bossS = { hp: max, max, t: 0, gap: -6, x: 0, y: 8, z: g.player.z + 6, next: 2.2, ammo: 0, in: false, flash: 0 };
+      const g = this.g, max = this.coop ? 16 : 10;
+      this.bossS = { hp: max, max, t: 0, gap: -6, x: 0, y: 8, z: g.player.z + 6, next: 2.2, in: false, flash: 0 };
       for (const e of this.enemies) this.remove(e); this.enemies = []; this.planned = [];
       this.boss.visible = true;
       this.bossBar.hidden = false; this.bossBar.querySelector('span').textContent = '🛸 ' + UI.t('cbBossName');
       VR.Audio.play('thunder'); VR.Audio.play('buzz'); g.shake = 0.4;
       UI.toast(UI.t('cbBossIn'), 1800, true);
-      this.giveAmmo(4);
-      setTimeout(() => { if (g.state === 'playing') UI.toast(UI.t(this.coop ? 'cbBossCoop' : 'cbAmmo'), 1300, true); }, 1900);
+      setTimeout(() => { if (g.state === 'playing') UI.toast(UI.t(this.coop ? 'cbBossCoop' : 'cbBossTip'), 1600, true); }, 1900);
     }
     dropBomb(lane) {
       const g = this.g, p = g.player, B = this.bossS;

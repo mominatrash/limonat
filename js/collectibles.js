@@ -139,13 +139,12 @@
       g.translate(0, 0, -0.05);
       mb.geo('chrome', 0xffd23f, g, 0, 0, 0);
     },
-    box(mb) {                                   // mystery box: pink crate, green ribbon, a lemon on top
-      mb.box('paint', 0xff6fd8, 0, 0, 0, 0.5, 0.5, 0.5, { r: 0.07 });
-      mb.box('paint', 0x6ee07a, 0, 0, 0, 0.52, 0.52, 0.12, { r: 0.02 });
-      mb.box('paint', 0x6ee07a, 0, 0, 0, 0.12, 0.52, 0.52, { r: 0.02 });
-      mb.sphere('gloss', 0xffd23f, 0, 0.36, 0, 0.13, { sz: 1.3, seg: 12 });
-      mb.sphere('gloss', 0x3f9a3a, 0.07, 0.46, 0.02, 0.06, { sx: 1.3, sy: 0.3, seg: 8 });
-      for (const s of [-1, 1]) mb.box('glow', 0xffffff, s * 0.1, 0.02, 0.26, 0.05, 0.16, 0.01);   // "!!"
+    goat(mb) {                                  // Mishmish's bell: brass bell on a red collar
+      mb.torus('paint', 0xe8433a, 0, 0.26, 0, 0.2, 0.035, { seg: 20 });
+      mb.cyl('chrome', 0xf2c14a, 0, 0.0, 0, 0.1, 0.24, 0.34, { seg: 18 });
+      mb.torus('chrome', 0xd9a520, 0, -0.17, 0, 0.235, 0.03, { rx: Math.PI / 2, seg: 20 });
+      mb.sphere('chrome', 0xf2c14a, 0, 0.17, 0, 0.1, { seg: 12 });
+      mb.sphere('metal', 0x5a3a1e, 0, -0.24, 0, 0.06, { seg: 10 });
     },
   };  VR.PU_BUILD = PU_BUILD;
 
@@ -354,5 +353,5 @@
     list() { return Object.keys(this.timers).filter(k => this.timers[k] > 0); }
   }
   VR.PowerUpState = PowerUpState;
-  VR.POWERUP_COLORS = { magnet: 0xff5a4f, shield: 0x4fb8ff, boost: 0xffb347, double: 0x6ee07a, invincible: 0xffd23f, lemonade: 0xffe14a, jetpack: 0xff8a3d, sneakers: 0x9b7bff, minecart: 0xc0703a, bike: 0x3ec1ff, box: 0xff6fd8 };
+  VR.POWERUP_COLORS = { magnet: 0xff5a4f, shield: 0x4fb8ff, boost: 0xffb347, double: 0x6ee07a, invincible: 0xffd23f, lemonade: 0xffe14a, jetpack: 0xff8a3d, sneakers: 0x9b7bff, minecart: 0xc0703a, bike: 0x3ec1ff, goat: 0xf2c14a };
 })();

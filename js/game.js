@@ -595,7 +595,7 @@
       UI.toast(UI.t('pu').lemonade, 1500, true);
     }
     onPowerUp(type, x, y, z) {
-      if (this.ask('pickPowerUp', type, x, y, z)) return;     // e.g. the combat item box
+      if (this.ask('pickPowerUp', type, x, y, z)) return;     // a system may take over a pickup completely
       this.powerups.activate(type);
       this.missions.bump('powerups');
       if (type === 'jetpack') { if (this.S.vehicles) this.S.vehicles.dismount('quiet'); this.startJetpack(); }

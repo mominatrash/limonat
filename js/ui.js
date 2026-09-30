@@ -31,7 +31,7 @@
       w_rain: 'مطر! السكة زلقة', w_sandstorm: 'عاصفة رملية!', w_fog: 'ضباب كثيف!',
       thiefAppears: 'حرامي الليمون! الحقه', thiefCaught: 'مسكت الماعز!', thiefEscaped: 'هرب الماعز!', rideBroken: 'انكسرت المركبة!',
       lRuns: 'جولات', lDist: 'مجموع المسافة', lCoins: 'مجموع العملات', lBest: 'أبعد مسافة', lJumps: 'قفزات', lLemons: 'ليمونات', lJet: 'طيران', lClose: 'نجاة بأعجوبة',
-      pu: { magnet: 'مغناطيس!', shield: 'درع!', boost: 'انطلاق!', double: 'عملات مضاعفة!', invincible: 'نجمة!', jetpack: 'جيت باك! طِر!', sneakers: 'حذاء النطّ!', minecart: 'عربة المنجم!', bike: 'بسكليت!', lemonade: 'ليموناضة! نقاط وعملات مضاعفة' },
+      pu: { magnet: 'مغناطيس!', shield: 'درع!', boost: 'انطلاق!', double: 'عملات مضاعفة!', invincible: 'نجمة!', jetpack: 'جيت باك! طِر!', sneakers: 'حذاء النطّ!', minecart: 'عربة المنجم!', bike: 'بسكليت!', goat: 'جرس مشمش! 🐐', lemonade: 'ليموناضة! نقاط وعملات مضاعفة' },
       m: 'م',
     },
     en: {
@@ -51,7 +51,7 @@
       w_rain: 'Rain! Slippery tracks', w_sandstorm: 'Sandstorm!', w_fog: 'Thick fog!',
       thiefAppears: 'Lemon thief! Catch it', thiefCaught: 'Goat caught!', thiefEscaped: 'The goat got away!', rideBroken: 'Your ride broke!',
       lRuns: 'Runs', lDist: 'Total distance', lCoins: 'Total coins', lBest: 'Longest run', lJumps: 'Jumps', lLemons: 'Lemons', lJet: 'Flights', lClose: 'Close calls',
-      pu: { magnet: 'Magnet!', shield: 'Shield!', boost: 'Boost!', double: '2x Coins!', invincible: 'Star!', jetpack: 'Jetpack! Fly!', sneakers: 'Super Sneakers!', minecart: 'Mine cart!', bike: 'Bicycle!', lemonade: 'Lemonade! 2x score & coins' },
+      pu: { magnet: 'Magnet!', shield: 'Shield!', boost: 'Boost!', double: '2x Coins!', invincible: 'Star!', jetpack: 'Jetpack! Fly!', sneakers: 'Super Sneakers!', minecart: 'Mine cart!', bike: 'Bicycle!', goat: 'Mishmish bell! 🐐', lemonade: 'Lemonade! 2x score & coins' },
       m: 'm',
     },
   };
