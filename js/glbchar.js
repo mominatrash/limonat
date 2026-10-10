@@ -114,7 +114,7 @@
     ['thighR', 'thigh_r', 'calf_r'], ['shinR', 'calf_r', 'foot_r'], ['footR', 'foot_r', null],
   ];
   // arms hang a little away from the body (wide sleeves and vest), hands continue the forearm
-  const OUR_DIR = { spine: [0, 1, 0], chest: [0, 1, 0], neck: [0, 1, 0], armL: [-0.26, -1, 0], foreL: [-0.2, -1, 0], handL: [-0.12, -1, 0.05], armR: [0.26, -1, 0], foreR: [0.2, -1, 0], handR: [0.12, -1, 0.05], thighL: [0, -1, 0], shinL: [0, -1, 0], thighR: [0, -1, 0], shinR: [0, -1, 0] };
+  const OUR_DIR = { spine: [0, 1, 0], chest: [0, 1, 0], neck: [0, 1, 0], armL: [-0.26, -1, 0], foreL: [-0.2, -1, 0], handL: [-0.12, -1, 0.05], armR: [0.26, -1, 0], foreR: [0.2, -1, 0], handR: [0.12, -1, 0.05], thighL: [-0.07, -1, 0], shinL: [-0.02, -1, 0], thighR: [0.07, -1, 0], shinR: [0.02, -1, 0] };
   function prepare(tp, def) {
     if (tp.prep) return tp.prep;
     const idx = {}; tp.names.forEach((n, i) => (idx[n] = i));
@@ -193,13 +193,23 @@
       const leg = chain([['thigh' + S, 'thigh_' + sd, 'calf_' + sd], ['shin' + S, 'calf_' + sd, 'foot_' + sd], ['foot' + S, 'foot_' + sd, null]]);
       if (leg) {
         // the boot keeps its own flat-on-the-ground rest orientation (only the thigh / shin swing)
-        for (const [ours, i, R] of leg) { const A = ours.startsWith('foot') ? new T.Quaternion() : R; drive[i] = { ours, A, AQ: A.clone().multiply(wq[i]) }; }
+        // the boot keeps its flat rest pose but is turned (about the vertical only) to point straight ahead
+        const fi = idx['foot_' + sd], bi2 = idx['ball_' + sd];
+        let footA = new T.Quaternion();
+        if (fi != null && bi2 != null) {
+          const d = wpos[bi2].clone().sub(wpos[fi]);
+          footA.setFromAxisAngle(new T.Vector3(0, 1, 0), -Math.atan2(d.x, d.z) + side * ((def.toeOut || 0.06)));
+        }
+        for (const [ours, i, R] of leg) { const A = ours.startsWith('foot') ? footA : R; drive[i] = { ours, A, AQ: A.clone().multiply(wq[i]) }; }
       }
     }
     // scale: match hip height
     const pel = idx.pelvis != null ? wpos[idx.pelvis] : new T.Vector3(0, 0.9, 0);
     const scale = (def.glbScale || 1) * D.hipY / pel.y;
-    return (tp.prep = { idx, wpos, wq, lq, drive, scale, pelvis: idx.pelvis, palms });
+    // clavicles shrug with the arm once it rises past ~50° (keeps the shoulder / collar / vest from pinching)
+    const clav = {};
+    for (const [sd, S] of [['l', 'L'], ['r', 'R']]) if (idx['clavicle_' + sd] != null) clav[idx['clavicle_' + sd]] = { arm: 'arm' + S, dir: tgt('arm' + S) };
+    return (tp.prep = { idx, wpos, wq, lq, drive, scale, pelvis: idx.pelvis, palms, clav });
   }
 
   // ------------------------------------------------------------ finger bones
@@ -306,7 +316,10 @@
   }
 
   function attach(rig, tp, def) {
-    const P = prepare(tp, def), FG = addFingers(tp, P, def), H = addHair(tp, P, def);
+    const P = prepare(tp, def);
+    // a re-skinned file already carries finger and hair bones; otherwise build them here
+    const fileFingers = P.idx.finger_01_l != null, fileHair = P.idx.hair_back != null;
+    const FG = fileFingers ? [] : addFingers(tp, P, def), H = fileHair ? null : addHair(tp, P, def);
     if (!tp.skinSet) {
       tp.geo.setAttribute('skinIndex', new T.Uint16BufferAttribute(tp.joints, 4));
       tp.geo.setAttribute('skinWeight', new T.Float32BufferAttribute(tp.weights, 4));
@@ -331,8 +344,20 @@
       allBones.push(b1, b2); inverses.push(w1.clone().invert(), w2.clone().invert());
       fingers.push({ sd: f.sd, b1, b2, axis: f.wax.clone().applyQuaternion(hq.clone().invert()), sign: f.sign });
     }
+    if (fileFingers) for (const sd of ['l', 'r']) {
+      const i1 = P.idx['finger_01_' + sd], i2 = P.idx['finger_02_' + sd];
+      if (i1 != null && i2 != null) fingers.push({ sd, file: true, i1, i2 });       // curl = rotation about the bone's own +X
+    }
     // hair: a fixed pivot at the skull centre (axes = our runner's axes), then the sprung bone
-    const springs = [];
+    const springs = [], hairFile = [];
+    const spring = (az) => { const back = Math.cos(az) < -0.5, front = Math.cos(az) > 0.5;
+      return { st: [{ x: 0, z: 0, vx: 0, vz: 0 }], g: [front ? 0.35 : back ? 0.8 : 0.6], sx: 0.55, sz: Math.sin(az) * 0.5 + 0.4, k: 120, d: 7.5, flutter: 0.05, dragK: back ? 0.55 : 0.35, ay: 0.0016, rest: [0] }; };
+    if (fileHair) for (const [nm, az] of [['hair_back', Math.PI], ['hair_left', Math.PI / 2], ['hair_right', -Math.PI / 2], ['hair_front', 0]]) {
+      const i = P.idx[nm]; if (i == null) continue;
+      const proxy = new T.Object3D(); proxy.userData.rx0 = 0;        // the spring drives this; the file bone copies it
+      springs.push(Object.assign({ bones: [proxy] }, spring(az)));
+      hairFile.push({ i, proxy });
+    }
     if (H) {
       const head = bones[P.idx.head], headBindInv = tp.bind[P.idx.head].clone().invert();
       for (const gr of H.groups) {
@@ -356,13 +381,13 @@
     mesh.bind(skeleton, new T.Matrix4());
     rig.root.add(G);
     rig.springs = springs;
-    rig.glb = { G, bones, P, tp, fingers };
+    rig.glb = { G, bones, P, tp, fingers, hairFile };
     // copy the game's pose onto the model whenever the scene computes its matrices (before drawing and shadows)
     G.updateMatrixWorld = function (force) { if (!rig.glbFreeze) retarget(rig); T.Group.prototype.updateMatrixWorld.call(this, force); };
     retarget(rig);
   }
 
-  const _qs = {}, _t = new T.Quaternion(), _n = [], _d = new T.Vector3(), _id = new T.Quaternion();
+  const _qs = {}, _t = new T.Quaternion(), _n = [], _d = new T.Vector3(), _id = new T.Quaternion(), _fq = new T.Quaternion(), _X = new T.Vector3(1, 0, 0), _ax = new T.Vector3();
   function retarget(rig) {
     const { bones, P, tp } = rig.glb, B = rig.bones;
     // our bones' rotations in runner space (rest = identity everywhere)
@@ -382,6 +407,15 @@
         Qn.copy(FQi).multiply(_qs[dr.ours]).multiply(FQ).multiply(dr.AQ);
       } else {
         Qn.copy(P.lq[i].q); if (pi >= 0) Qn.premultiply(_n[pi]);
+        const cl = P.clav[i];
+        if (cl) {
+          _d.copy(cl.dir).applyQuaternion(_fq.copy(FQi).multiply(_qs[cl.arm]).multiply(FQ));     // arm direction, model space
+          const elev = Math.acos(Math.max(-1, Math.min(1, -_d.y)));
+          if (elev > 0.87) {
+            _ax.set(0, -1, 0).cross(_d); const l = _ax.length();
+            if (l > 1e-4) Qn.premultiply(_fq.setFromAxisAngle(_ax.divideScalar(l), Math.min(0.5, (elev - 0.87) * 0.38)));
+          }
+        }
       }
       const b = bones[i];
       if (pi >= 0) b.quaternion.copy(_t.copy(_n[pi]).invert().multiply(Qn));
@@ -392,8 +426,15 @@
       for (const f of rig.glb.fingers) {
         const fx = Math.abs(B[f.sd === 'l' ? 'foreL' : 'foreR'].rotation.x), k = Math.min(1, fx / 1.0);
         const c1 = 0.3 + 0.55 * k, c2 = 0.25 + 0.5 * k;      // relaxed when the arm hangs, a loose fist when it pumps
-        f.b1.quaternion.setFromAxisAngle(f.axis, c1 * f.sign); f.b2.quaternion.setFromAxisAngle(f.axis, c2 * f.sign);
+        if (f.file) {
+          bones[f.i1].quaternion.copy(P.lq[f.i1].q).multiply(_fq.setFromAxisAngle(_X, c1));
+          bones[f.i2].quaternion.copy(P.lq[f.i2].q).multiply(_fq.setFromAxisAngle(_X, c2));
+        } else { f.b1.quaternion.setFromAxisAngle(f.axis, c1 * f.sign); f.b2.quaternion.setFromAxisAngle(f.axis, c2 * f.sign); }
       }
+    }
+    // hair bones from the file follow their springs (spring axes = runner axes)
+    for (const h of rig.glb.hairFile || []) {
+      bones[h.i].quaternion.copy(P.lq[h.i].q).multiply(_fq.copy(FQi).multiply(h.proxy.quaternion).multiply(FQ));
     }
     // hips: bob, crouch and lateral sway carry over (in model units)
     if (P.pelvis != null) {
@@ -415,12 +456,12 @@
     perk: { ar: 'جرس مشمش يدوم ‎+50%', en: 'Mishmish bell lasts +50%' }, perkMul: { goat: 1.5 },
     // menu stance: relaxed, weight on one leg, arms hanging close with the hands turned to the thighs
     idle(p, t, A) {
-      const br = Math.sin(t * 2.1), sh = Math.sin(t * 0.7), lk = Math.sin(t * 0.45);
+      const br = Math.sin(t * 2.1), sh = Math.sin(t * 0.7), lk = Math.sin(t * 0.7 + 1.1);      // all periods divide 2π/0.7 (seamless loop)
       A.set(p, 'hips', 0, 6 + sh * 2, 3 + sh * 1.5); p[0] = 0.015 + sh * 0.006;
       A.set(p, 'thighL', 3, 0, -3); A.set(p, 'shinL', -3); A.set(p, 'footL', 2, 0, 2);
       A.set(p, 'thighR', 7, -5, 4); A.set(p, 'shinR', -16 - Math.max(0, sh) * 4); A.set(p, 'footR', 6);
       A.set(p, 'spine', -2 + br * 0.6, -2, -2); A.set(p, 'chest', 2 + br * 1.2, -2, -2);
-      A.set(p, 'head', 3 + Math.sin(t * 0.9) * 2, -10 + lk * 12, 5);
+      A.set(p, 'head', 3 + Math.sin(t * 1.4) * 2, -10 + lk * 12, 5);
       A.set(p, 'armL', -3 + br, 0, -3 - br * 0.8); A.set(p, 'foreL', 10 + br * 2); A.set(p, 'handL', 0, 60, 0);
       A.set(p, 'armR', -3 + br, 0, 3 + br * 0.8); A.set(p, 'foreR', 10 + br * 2); A.set(p, 'handR', 0, -60, 0);
     } };
