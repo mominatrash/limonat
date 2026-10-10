@@ -414,6 +414,7 @@
     animateIdle(dt, t, wave = 0, look = 0) {
       const r = this.rig; if (!r) return;
       A.idle(this.pIdle, t, look);
+      if (r.def && r.def.idle) r.def.idle(this.pIdle, t, A);        // a character's own stance on the menu
       A.wave(this.pIdle, t, wave);
       let hop = 0;
       if (this.cheer > 0) {

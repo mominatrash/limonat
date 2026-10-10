@@ -285,7 +285,18 @@
   const PAL = (c) => ({ skin: c, shirt: c, shorts: c, shoe: c, sole: c, detail: c, cap: c, hair: c, ink: 0x161616 });
   const NOVA = { id: 'nova', name: 'نوفا', nameEn: 'Nova', tagline: 'ستايل الشارع ع السكة', taglineEn: 'Street style on the rails', price: 0, palette: PAL(0xe9705c),
     glb: 'assets/nova.glb', glbTune: { foreL: 0.72, foreR: 0.72, handL: 0.5, handR: 0.5 }, glbTwist: { handL: -1.3, handR: 1.3, foreL: -0.65, foreR: 0.65 }, hair: { r0: 0.13, r1: 0.24, cy: 0.05, cz: -0.01 },
-    perk: { ar: 'جرس مشمش يدوم ‎+50%', en: 'Mishmish bell lasts +50%' }, perkMul: { goat: 1.5 } };
+    perk: { ar: 'جرس مشمش يدوم ‎+50%', en: 'Mishmish bell lasts +50%' }, perkMul: { goat: 1.5 },
+    // menu stance: relaxed, weight on one leg, arms hanging close with the hands turned to the thighs
+    idle(p, t, A) {
+      const br = Math.sin(t * 2.1), sh = Math.sin(t * 0.7), lk = Math.sin(t * 0.45);
+      A.set(p, 'hips', 0, 6 + sh * 2, 3 + sh * 1.5); p[0] = 0.015 + sh * 0.006;
+      A.set(p, 'thighL', 3, 0, -3); A.set(p, 'shinL', -3); A.set(p, 'footL', 2, 0, 2);
+      A.set(p, 'thighR', 7, -5, 4); A.set(p, 'shinR', -16 - Math.max(0, sh) * 4); A.set(p, 'footR', 6);
+      A.set(p, 'spine', -2 + br * 0.6, -2, -2); A.set(p, 'chest', 2 + br * 1.2, -2, -2);
+      A.set(p, 'head', 3 + Math.sin(t * 0.9) * 2, -10 + lk * 12, 5);
+      A.set(p, 'armL', -3 + br, 0, 2 - br * 0.8); A.set(p, 'foreL', 10 + br * 2); A.set(p, 'handL', 0, 60, 0);
+      A.set(p, 'armR', -3 + br, 0, -2 + br * 0.8); A.set(p, 'foreR', 10 + br * 2); A.set(p, 'handR', 0, -60, 0);
+    } };
   const at = VR.CHARACTERS.findIndex(c => c.id === 'ninja');
   VR.CHARACTERS.splice(at >= 0 ? at + 1 : VR.CHARACTERS.length, 0, NOVA);
   // start downloading the model as soon as the character screen opens (it is a few MB)
