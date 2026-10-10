@@ -136,7 +136,7 @@
     ['thighR', 'thigh_r', 'calf_r'], ['shinR', 'calf_r', 'foot_r'], ['footR', 'foot_r', null],
   ];
   // arms hang a little away from the body (wide sleeves and vest), hands continue the forearm
-  const OUR_DIR = { spine: [0, 1, 0], chest: [0, 1, 0], neck: [0, 1, 0], armL: [-0.26, -1, 0], foreL: [-0.2, -1, 0], handL: [-0.12, -1, 0.05], armR: [0.26, -1, 0], foreR: [0.2, -1, 0], handR: [0.12, -1, 0.05], thighL: [-0.07, -1, 0], shinL: [-0.02, -1, 0], thighR: [0.07, -1, 0], shinR: [0.02, -1, 0] };
+  const OUR_DIR = { spine: [0, 1, 0], chest: [0, 1, 0], neck: [0, 1, 0], armL: [-0.26, -1, 0], foreL: [-0.2, -1, 0], handL: [-0.12, -1, 0.05], armR: [0.26, -1, 0], foreR: [0.2, -1, 0], handR: [0.12, -1, 0.05], thighL: [-0.035, -1, 0], shinL: [0.015, -1, 0], thighR: [0.035, -1, 0], shinR: [-0.015, -1, 0] };
   function prepare(tp, def) {
     if (tp.prep) return tp.prep;
     const idx = {}; tp.names.forEach((n, i) => (idx[n] = i));
@@ -545,14 +545,14 @@
   VR._glbDebug = { readGLB, accessor, retarget };
   const PAL = (c) => ({ skin: c, shirt: c, shorts: c, shoe: c, sole: c, detail: c, cap: c, hair: c, ink: 0x161616 });
   const NOVA = { id: 'nova', name: 'نوفا', nameEn: 'Nova', tagline: 'ستايل الشارع ع السكة', taglineEn: 'Street style on the rails', price: 0, palette: PAL(0xe9705c),
-    glb: 'assets/nova.glb?v=20261010d', glbScale: 1.17, cadence: 1.45, glbTune: { foreL: 0.72, foreR: 0.72, handL: 0.15, handR: 0.15, shinL: 1.3, shinR: 1.3, thighL: 1.2, thighR: 1.2 }, hair: { r0: 0.13, r1: 0.24, cy: 0.05, cz: -0.01 },
+    glb: 'assets/nova.glb?v=20261010e', glbScale: 1.17, cadence: 1.45, glbTune: { foreL: 0.72, foreR: 0.72, handL: 0.15, handR: 0.15, shinL: 1.3, shinR: 1.3, thighL: 1.2, thighR: 1.2 }, hair: { r0: 0.13, r1: 0.24, cy: 0.05, cz: -0.01 },
     perk: { ar: 'جرس مشمش يدوم ‎+50%', en: 'Mishmish bell lasts +50%' }, perkMul: { goat: 1.5 },
     // menu stance: relaxed, weight on one leg, arms hanging close with the hands turned to the thighs
     idle(p, t, A) {
       const br = Math.sin(t * 2.1), sh = Math.sin(t * 0.7), lk = Math.sin(t * 0.7 + 1.1);      // all periods divide 2π/0.7 (seamless loop)
       A.set(p, 'hips', 0, 6 + sh * 2, 3 + sh * 1.5); p[0] = 0.015 + sh * 0.006;
-      A.set(p, 'thighL', 3, 0, -3); A.set(p, 'shinL', -3); A.set(p, 'footL', 2, 0, 2);
-      A.set(p, 'thighR', 7, -5, 4); A.set(p, 'shinR', -16 - Math.max(0, sh) * 4); A.set(p, 'footR', 6);
+      A.set(p, 'thighL', 3, 0, -1); A.set(p, 'shinL', -3); A.set(p, 'footL', 2, 0, 0);
+      A.set(p, 'thighR', 7, 0, 0); A.set(p, 'shinR', -14 - Math.max(0, sh) * 4, 0, -5); A.set(p, 'footR', 6, 0, 3);
       A.set(p, 'spine', -2 + br * 0.6, -2, -2); A.set(p, 'chest', 2 + br * 1.2, -2, -2);
       A.set(p, 'head', 3 + Math.sin(t * 1.4) * 2, -10 + lk * 12, 5);
       A.set(p, 'armL', -3 + br, 0, -3 - br * 0.8); A.set(p, 'foreL', 10 + br * 2); A.set(p, 'handL', 0, 0, 0);
