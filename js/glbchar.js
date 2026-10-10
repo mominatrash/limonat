@@ -89,6 +89,28 @@
       if (mj.normalTexture) { mat.normalMap = await image(g, mj.normalTexture.index, false); mat.normalScale.set(1, -1); }
       if (pbr.metallicRoughnessTexture) { const t = await image(g, pbr.metallicRoughnessTexture.index, false); mat.roughnessMap = t; mat.metalnessMap = t; }
       Object.assign(mat, def.glbMat || {});
+      // like the other characters, lit on its own terms (fixed soft key + front fill, a little gloss and rim),
+      // so it keeps its true colours in every biome — at night and in tunnels too (uDim settles it a touch)
+      mat.toneMapped = false;
+      mat.onBeforeCompile = (sh) => {
+        if (VR.charUniforms) sh.uniforms.uDim = VR.charUniforms.uDim; else sh.uniforms.uDim = { value: 0 };
+        sh.fragmentShader = 'uniform float uDim;\n' + sh.fragmentShader.replace('#include <opaque_fragment>', `
+          vec3 nN = normalize(normal);
+          vec3 nKey = vec3(-0.32, 0.58, 0.78);
+          #if NUM_DIR_LIGHTS > 0
+            nKey += directionalLights[0].direction * 0.5;
+          #endif
+          nKey.z = max(nKey.z, 0.5); nKey = normalize(nKey);
+          float nL = smoothstep(-0.55, 0.85, dot(nN, nKey));
+          vec3 nShade = mix(vec3(0.60, 0.62, 0.70), vec3(1.0), nL);
+          nShade *= 0.92 + 0.08 * clamp(nN.y * 0.5 + 0.5, 0.0, 1.0);
+          vec3 nV = normalize(vViewPosition);
+          float nRim = pow(1.0 - clamp(dot(nN, nV), 0.0, 1.0), 4.0);
+          float nSpec = pow(max(dot(nN, normalize(nKey + nV)), 0.0), mix(48.0, 6.0, roughnessFactor)) * (1.0 - roughnessFactor) * 0.22;
+          nShade = nShade * (1.0 - uDim);
+          gl_FragColor = vec4(diffuseColor.rgb * pow(nShade, vec3(2.2)) + vec3(nSpec + nRim * 0.05) * (1.0 - uDim), 0.0);`);
+      };
+      mat.customProgramCacheKey = () => 'glbCharShade';
       // skeleton (bind pose from the inverse bind matrices)
       const sk = J.skins[0], ibmA = accessor(g, sk.inverseBindMatrices).arr;
       const nodeToJ = {}; sk.joints.forEach((n, i) => (nodeToJ[n] = i));
@@ -405,7 +427,11 @@
       const q = _qs[n] || (_qs[n] = new T.Quaternion());
       q.copy(B[n].quaternion);
       const k = tune[n];
-      if (k != null) q.slerp(_id, 1 - k);                  // soften (k < 1) a joint's bend for this model's proportions
+      if (k != null && k <= 1) q.slerp(_id, 1 - k);         // soften (k < 1) a joint's bend for this model's proportions
+      else if (k != null) {                                    // boost (k > 1), never past ~135° (slides / landings stay as they are)
+        const a = 2 * Math.acos(Math.min(1, Math.abs(q.w)));
+        if (a > 1e-4) { const want = Math.max(a, Math.min(a * k, 2.36)); q.slerp(_id, 1 - want / a); }
+      }
       if (p) q.premultiply(_qs[p]);
     }
     for (let i = 0; i < bones.length; i++) {
@@ -484,7 +510,7 @@
   VR._glbDebug = { readGLB, accessor, retarget };
   const PAL = (c) => ({ skin: c, shirt: c, shorts: c, shoe: c, sole: c, detail: c, cap: c, hair: c, ink: 0x161616 });
   const NOVA = { id: 'nova', name: 'نوفا', nameEn: 'Nova', tagline: 'ستايل الشارع ع السكة', taglineEn: 'Street style on the rails', price: 0, palette: PAL(0xe9705c),
-    glb: 'assets/nova.glb', glbScale: 1.17, glbTune: { foreL: 0.72, foreR: 0.72, handL: 0.15, handR: 0.15 }, hair: { r0: 0.13, r1: 0.24, cy: 0.05, cz: -0.01 },
+    glb: 'assets/nova.glb?v=20261010c', glbScale: 1.17, cadence: 1.15, glbTune: { foreL: 0.72, foreR: 0.72, handL: 0.15, handR: 0.15, shinL: 1.3, shinR: 1.3 }, hair: { r0: 0.13, r1: 0.24, cy: 0.05, cz: -0.01 },
     perk: { ar: 'جرس مشمش يدوم ‎+50%', en: 'Mishmish bell lasts +50%' }, perkMul: { goat: 1.5 },
     // menu stance: relaxed, weight on one leg, arms hanging close with the hands turned to the thighs
     idle(p, t, A) {

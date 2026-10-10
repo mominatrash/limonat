@@ -248,7 +248,7 @@
 
       const s = clamp((speed - C.SPEED_START) / (C.SPEED_MAX - C.SPEED_START), 0, 1);
       const prevPhase = this.phase;
-      this.phase = (this.phase + dt * (1.32 + speed * 0.036)) % 1;
+      this.phase = (this.phase + dt * (1.32 + speed * 0.036) * ((r.def && r.def.cadence) || 1)) % 1;
       // footfalls: right foot at phase 0, left at 0.5
       if (this.grounded && !this.sliding && !this.ride) {
         if (prevPhase > this.phase) this.footstep('R');
