@@ -137,10 +137,117 @@
       }
       drive[i] = { ours, A, AQ: A.clone().multiply(wq[i]) };
     }
+    // limbs: align as CHAINS (each joint swings from where its parent already put it), so no twist
+    // builds up at the elbow / wrist / knee; then turn the whole arm so the palm faces the thigh.
+    const swing = (from, to) => new T.Quaternion().setFromUnitVectors(from.clone().normalize(), to.clone().normalize());
+    const tgt = (ours) => new T.Vector3(...OUR_DIR[ours]).normalize().applyQuaternion(FQi);
+    const chain = (list) => {                    // list: [[ours, theirs, child], ...]
+      let R = new T.Quaternion();
+      const out = [];
+      for (const [ours, theirs, child] of list) {
+        const i = idx[theirs], c = idx[child]; if (i == null) return null;
+        if (c != null && OUR_DIR[ours]) {
+          const d = wpos[c].clone().sub(wpos[i]).normalize().applyQuaternion(R);
+          R = swing(d, tgt(ours)).multiply(R);
+        }
+        out.push([ours, i, R.clone()]);
+      }
+      return out;
+    };
+    const palmNormal = (hi, side) => {           // flattest axis of the hand's vertices (PCA), facing down / inward in the A-pose
+      const pos = tp.geo.attributes.position.array, J = tp.joints, W = tp.weights, n = pos.length / 3;
+      const m = new T.Vector3(), pts = [];
+      for (let k = 0; k < n; k++) for (let s2 = 0; s2 < 4; s2++) if (J[k * 4 + s2] === hi && W[k * 4 + s2] > 0.7) { const v = new T.Vector3(pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2]); pts.push(v); m.add(v); break; }
+      if (pts.length < 20) return null;
+      m.divideScalar(pts.length);
+      const C = [0, 0, 0, 0, 0, 0, 0, 0, 0];
+      for (const v of pts) { const d = [v.x - m.x, v.y - m.y, v.z - m.z]; for (let a2 = 0; a2 < 3; a2++) for (let b2 = 0; b2 < 3; b2++) C[a2 * 3 + b2] += d[a2] * d[b2]; }
+      // smallest eigenvector: power iteration on (trace·I − C)
+      const tr = C[0] + C[4] + C[8]; let v = new T.Vector3(0.3, 1, 0.2);
+      for (let it = 0; it < 60; it++) {
+        const x = (tr - C[0]) * v.x - C[1] * v.y - C[2] * v.z, y = -C[3] * v.x + (tr - C[4]) * v.y - C[5] * v.z, z = -C[6] * v.x - C[7] * v.y + (tr - C[8]) * v.z;
+        v.set(x, y, z).normalize();
+      }
+      const guess = new T.Vector3(-side, -1, 0);          // A-pose palms face down and in
+      if (v.dot(guess) < 0) v.negate();
+      return v;
+    };
+    const palms = {};
+    for (const sd of ['l', 'r']) {
+      const S = sd === 'l' ? 'L' : 'R', side = sd === 'l' ? 1 : -1;     // model's left hand sits at +x
+      const arm = chain([['arm' + S, 'upperarm_' + sd, 'lowerarm_' + sd], ['fore' + S, 'lowerarm_' + sd, 'hand_' + sd], ['hand' + S, 'hand_' + sd, 'middle_01_' + sd]]);
+      if (arm) {
+        const hi = idx['hand_' + sd], pn = palmNormal(hi, side);
+        palms[sd] = pn;
+        let tw = new T.Quaternion();
+        if (pn) {
+          const axis = tgt('hand' + S), now = pn.clone().applyQuaternion(arm[2][2]);
+          const want = new T.Vector3(-side, 0, -0.3);         // palm toward the thigh, a little back (model space)
+          const pa = now.addScaledVector(axis, -now.dot(axis)).normalize(), pb = want.addScaledVector(axis, -want.dot(axis)).normalize();
+          let ang = Math.acos(Math.max(-1, Math.min(1, pa.dot(pb))));
+          if (new T.Vector3().crossVectors(pa, pb).dot(axis) < 0) ang = -ang;
+          tw.setFromAxisAngle(axis, ang + ((def.glbPalm || {})[S] || 0));
+        }
+        for (const [ours, i, R] of arm) { const A = tw.clone().multiply(R); drive[i] = { ours, A, AQ: A.clone().multiply(wq[i]) }; }
+      }
+      const leg = chain([['thigh' + S, 'thigh_' + sd, 'calf_' + sd], ['shin' + S, 'calf_' + sd, 'foot_' + sd], ['foot' + S, 'foot_' + sd, null]]);
+      if (leg) {
+        // the boot keeps its own flat-on-the-ground rest orientation (only the thigh / shin swing)
+        for (const [ours, i, R] of leg) { const A = ours.startsWith('foot') ? new T.Quaternion() : R; drive[i] = { ours, A, AQ: A.clone().multiply(wq[i]) }; }
+      }
+    }
     // scale: match hip height
     const pel = idx.pelvis != null ? wpos[idx.pelvis] : new T.Vector3(0, 0.9, 0);
     const scale = (def.glbScale || 1) * D.hipY / pel.y;
-    return (tp.prep = { idx, wpos, wq, lq, drive, scale, pelvis: idx.pelvis });
+    return (tp.prep = { idx, wpos, wq, lq, drive, scale, pelvis: idx.pelvis, palms });
+  }
+
+  // ------------------------------------------------------------ finger bones
+  // The model has one bone per hand with the fingers spread flat. Two hinge bones are added
+  // across each hand (knuckles, middle of the fingers) so the fingers can curl into a loose fist.
+  function addFingers(tp, P, def) {
+    if (tp.fingers !== undefined) return tp.fingers;
+    const out = [];
+    const pos = tp.geo.attributes.position.array, J = tp.joints, W = tp.weights, n = pos.length / 3;
+    for (const sd of ['l', 'r']) {
+      const hi = P.idx['hand_' + sd], mi = P.idx['middle_01_' + sd], pn = P.palms[sd];
+      if (hi == null || mi == null || !pn) continue;
+      const h0 = P.wpos[hi], a = P.wpos[mi].clone().sub(h0).normalize();
+      const nrm = pn.clone().addScaledVector(a, -pn.dot(a)).normalize(), wax = new T.Vector3().crossVectors(a, nrm).normalize();
+      let smax = 0;
+      const list = [];
+      for (let k = 0; k < n; k++) {
+        let wh = 0, slot = -1;
+        for (let q = 0; q < 4; q++) if (J[k * 4 + q] === hi) { wh = W[k * 4 + q]; slot = q; }
+        if (wh < 0.5) continue;
+        const v = new T.Vector3(pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2]).sub(h0), sp = v.dot(a);
+        if (sp > smax) smax = sp;
+        list.push([k, slot, wh, sp]);
+      }
+      if (!list.length) continue;
+      const k1 = smax * (def.knuckle || 0.47), k2 = smax * 0.74, ramp = smax * 0.06;
+      const sm = (e0, e1, x) => { const t = Math.min(1, Math.max(0, (x - e0) / (e1 - e0))); return t * t * (3 - 2 * t); };
+      const base = tp.names.length + (tp.extraBones || 0);
+      for (const [k, slot, wh, sp] of list) {
+        const w1 = sm(k1 - ramp, k1 + ramp, sp), w2 = sm(k2 - ramp, k2 + ramp, sp);
+        if (w1 <= 0.001) continue;
+        // hand keeps (1 - w1), first knuckle bone (w1 - w2), second (w2); scaled by the hand's share
+        J[k * 4 + slot] = hi; W[k * 4 + slot] = wh * (1 - w1);
+        const free = [0, 1, 2, 3].filter(q => q !== slot).sort((x, y) => W[k * 4 + x] - W[k * 4 + y]);
+        J[k * 4 + free[0]] = base; W[k * 4 + free[0]] = wh * (w1 - w2);
+        J[k * 4 + free[1]] = base + 1; W[k * 4 + free[1]] = wh * w2;
+        // renormalise
+        let t = 0; for (let q = 0; q < 4; q++) t += W[k * 4 + q];
+        for (let q = 0; q < 4; q++) W[k * 4 + q] /= t || 1;
+      }
+      // curl direction: fingertips toward the palm
+      const test = a.clone().applyAxisAngle(wax, 0.1);
+      const sign = test.sub(a).dot(nrm) > 0 ? 1 : -1;
+      out.push({ sd, hi, base, k1p: h0.clone().addScaledVector(a, k1), k2p: h0.clone().addScaledVector(a, k2), wax, sign });
+      tp.extraBones = (tp.extraBones || 0) + 2;
+    }
+    tp.fingers = out;
+    return out;
   }
 
   // ------------------------------------------------------------ hair spring bones
@@ -153,7 +260,7 @@
     const c = new T.Vector3(hp.x, hp.y + (H.cy || 0.06), hp.z + (H.cz || 0));     // skull centre (model space)
     const pos = tp.geo.attributes.position.array, J = tp.joints, W = tp.weights, n = pos.length / 3;
     const groups = H.groups || [{ az: Math.PI, name: 'hairB' }, { az: Math.PI / 2, name: 'hairL' }, { az: -Math.PI / 2, name: 'hairR' }, { az: 0, name: 'hairF' }];
-    const base = tp.names.length;
+    const base = tp.names.length + (tp.extraBones || 0);
     const v = new T.Vector3();
     let moved = 0;
     for (let k = 0; k < n; k++) {
@@ -199,7 +306,7 @@
   }
 
   function attach(rig, tp, def) {
-    const P = prepare(tp, def), H = addHair(tp, P, def);
+    const P = prepare(tp, def), FG = addFingers(tp, P, def), H = addHair(tp, P, def);
     if (!tp.skinSet) {
       tp.geo.setAttribute('skinIndex', new T.Uint16BufferAttribute(tp.joints, 4));
       tp.geo.setAttribute('skinWeight', new T.Float32BufferAttribute(tp.weights, 4));
@@ -212,6 +319,18 @@
       (tp.parent[i] >= 0 ? bones[tp.parent[i]] : G).add(b);
     });
     const allBones = bones.slice(), inverses = tp.ibm.slice();
+    // finger hinge bones (same order they were numbered in addFingers)
+    const fingers = [];
+    for (const f of FG) {
+      const hand = bones[f.hi], hb = tp.bind[f.hi], hq = P.wq[f.hi];
+      const w1 = new T.Matrix4().compose(f.k1p, hq, new T.Vector3(1, 1, 1)), w2 = new T.Matrix4().compose(f.k2p, hq, new T.Vector3(1, 1, 1));
+      const b1 = new T.Bone(), b2 = new T.Bone();
+      b1.position.copy(f.k1p.clone().applyMatrix4(hb.clone().invert()));
+      b2.position.copy(f.k2p.clone().sub(f.k1p).applyQuaternion(hq.clone().invert()));
+      hand.add(b1); b1.add(b2);
+      allBones.push(b1, b2); inverses.push(w1.clone().invert(), w2.clone().invert());
+      fingers.push({ sd: f.sd, b1, b2, axis: f.wax.clone().applyQuaternion(hq.clone().invert()), sign: f.sign });
+    }
     // hair: a fixed pivot at the skull centre (axes = our runner's axes), then the sprung bone
     const springs = [];
     if (H) {
@@ -237,7 +356,7 @@
     mesh.bind(skeleton, new T.Matrix4());
     rig.root.add(G);
     rig.springs = springs;
-    rig.glb = { G, bones, P, tp };
+    rig.glb = { G, bones, P, tp, fingers };
     // copy the game's pose onto the model whenever the scene computes its matrices (before drawing and shadows)
     G.updateMatrixWorld = function (force) { if (!rig.glbFreeze) retarget(rig); T.Group.prototype.updateMatrixWorld.call(this, force); };
     retarget(rig);
@@ -268,6 +387,14 @@
       if (pi >= 0) b.quaternion.copy(_t.copy(_n[pi]).invert().multiply(Qn));
       else b.quaternion.copy(Qn);
     }
+    // fingers: a loose fist (curl a little tighter while the elbows pump)
+    if (rig.glb.fingers.length) {
+      for (const f of rig.glb.fingers) {
+        const fx = Math.abs(B[f.sd === 'l' ? 'foreL' : 'foreR'].rotation.x), k = Math.min(1, fx / 1.0);
+        const c1 = 0.3 + 0.55 * k, c2 = 0.25 + 0.5 * k;      // relaxed when the arm hangs, a loose fist when it pumps
+        f.b1.quaternion.setFromAxisAngle(f.axis, c1 * f.sign); f.b2.quaternion.setFromAxisAngle(f.axis, c2 * f.sign);
+      }
+    }
     // hips: bob, crouch and lateral sway carry over (in model units)
     if (P.pelvis != null) {
       const pi = tp.parent[P.pelvis], hb = B.hips.position;
@@ -284,7 +411,7 @@
   VR._glbDebug = { readGLB, accessor, retarget };
   const PAL = (c) => ({ skin: c, shirt: c, shorts: c, shoe: c, sole: c, detail: c, cap: c, hair: c, ink: 0x161616 });
   const NOVA = { id: 'nova', name: 'نوفا', nameEn: 'Nova', tagline: 'ستايل الشارع ع السكة', taglineEn: 'Street style on the rails', price: 0, palette: PAL(0xe9705c),
-    glb: 'assets/nova.glb', glbTune: { foreL: 0.72, foreR: 0.72, handL: 0.5, handR: 0.5 }, glbTwist: { handL: -1.3, handR: 1.3, foreL: -0.65, foreR: 0.65 }, hair: { r0: 0.13, r1: 0.24, cy: 0.05, cz: -0.01 },
+    glb: 'assets/nova.glb', glbTune: { foreL: 0.72, foreR: 0.72, handL: 0.15, handR: 0.15 }, hair: { r0: 0.13, r1: 0.24, cy: 0.05, cz: -0.01 },
     perk: { ar: 'جرس مشمش يدوم ‎+50%', en: 'Mishmish bell lasts +50%' }, perkMul: { goat: 1.5 },
     // menu stance: relaxed, weight on one leg, arms hanging close with the hands turned to the thighs
     idle(p, t, A) {
@@ -294,8 +421,8 @@
       A.set(p, 'thighR', 7, -5, 4); A.set(p, 'shinR', -16 - Math.max(0, sh) * 4); A.set(p, 'footR', 6);
       A.set(p, 'spine', -2 + br * 0.6, -2, -2); A.set(p, 'chest', 2 + br * 1.2, -2, -2);
       A.set(p, 'head', 3 + Math.sin(t * 0.9) * 2, -10 + lk * 12, 5);
-      A.set(p, 'armL', -3 + br, 0, 2 - br * 0.8); A.set(p, 'foreL', 10 + br * 2); A.set(p, 'handL', 0, 60, 0);
-      A.set(p, 'armR', -3 + br, 0, -2 + br * 0.8); A.set(p, 'foreR', 10 + br * 2); A.set(p, 'handR', 0, -60, 0);
+      A.set(p, 'armL', -3 + br, 0, -3 - br * 0.8); A.set(p, 'foreL', 10 + br * 2); A.set(p, 'handL', 0, 60, 0);
+      A.set(p, 'armR', -3 + br, 0, 3 + br * 0.8); A.set(p, 'foreR', 10 + br * 2); A.set(p, 'handR', 0, -60, 0);
     } };
   const at = VR.CHARACTERS.findIndex(c => c.id === 'ninja');
   VR.CHARACTERS.splice(at >= 0 ? at + 1 : VR.CHARACTERS.length, 0, NOVA);
