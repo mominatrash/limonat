@@ -348,7 +348,8 @@
   function attach(rig, tp, def) {
     const P = prepare(tp, def);
     // a re-skinned file already carries finger and hair bones; otherwise build them here
-    const fileFingers = P.idx.finger_01_l != null, fileHair = P.idx.hair_back != null;
+    const digits = P.idx.fng_index_1_l != null, strands = Object.keys(P.idx).filter(n => /^hair_s\d+_1$/.test(n)).sort();
+    const fileFingers = digits || P.idx.finger_01_l != null, fileHair = strands.length > 0 || P.idx.hair_back != null;
     const FG = fileFingers ? [] : addFingers(tp, P, def), H = fileHair ? null : addHair(tp, P, def);
     if (!tp.skinSet) {
       tp.geo.setAttribute('skinIndex', new T.Uint16BufferAttribute(tp.joints, 4));
@@ -374,7 +375,23 @@
       allBones.push(b1, b2); inverses.push(w1.clone().invert(), w2.clone().invert());
       fingers.push({ sd: f.sd, b1, b2, axis: f.wax.clone().applyQuaternion(hq.clone().invert()), sign: f.sign });
     }
-    if (fileFingers) for (const sd of ['l', 'r']) {
+    // per-digit chains from the file: curl about +X, and the flat-spread fingers drawn a little together
+    if (digits) for (const sd of ['l', 'r']) {
+      const DG = ['thumb', 'index', 'middle', 'ring', 'pinky'], ids = DG.map(d => [P.idx[`fng_${d}_1_${sd}`], P.idx[`fng_${d}_2_${sd}`]]);
+      if (ids.some(([a, b]) => a == null || b == null)) continue;
+      const dir = ids.map(([a, b]) => P.wpos[b].clone().sub(P.wpos[a]).normalize());
+      const mean = dir.slice(1).reduce((m, d) => m.add(d), new T.Vector3()).normalize();
+      ids.forEach(([i1, i2], k) => {
+        let add = new T.Quaternion();
+        if (k > 0) {
+          const z = new T.Vector3(0, 0, 1).applyQuaternion(P.wq[i1]);
+          const ang = Math.atan2(new T.Vector3().crossVectors(dir[k], mean).dot(z), dir[k].dot(mean));
+          add.setFromAxisAngle(new T.Vector3(0, 0, 1), ang * 0.6);
+        }
+        fingers.push({ sd, file: true, digit: k, i1, i2, add });
+      });
+    }
+    else if (fileFingers) for (const sd of ['l', 'r']) {
       const i1 = P.idx['finger_01_' + sd], i2 = P.idx['finger_02_' + sd];
       if (i1 != null && i2 != null) fingers.push({ sd, file: true, i1, i2 });       // curl = rotation about the bone's own +X
     }
@@ -382,7 +399,17 @@
     const springs = [], hairFile = [];
     const spring = (az) => { const back = Math.cos(az) < -0.5, front = Math.cos(az) > 0.5;
       return { st: [{ x: 0, z: 0, vx: 0, vz: 0 }], g: [front ? 0.35 : back ? 0.8 : 0.6], sx: 0.55, sz: Math.sin(az) * 0.5 + 0.4, k: 120, d: 7.5, flutter: 0.05, dragK: back ? 0.55 : 0.35, ay: 0.0016, rest: [0] }; };
-    if (fileHair) for (const [nm, az] of [['hair_back', Math.PI], ['hair_left', Math.PI / 2], ['hair_right', -Math.PI / 2], ['hair_front', 0]]) {
+    // hair strands from the file: a 2-bone spring chain each (wind while running, a slow breeze when standing)
+    strands.forEach((n1, k) => {
+      const i1 = P.idx[n1], i2 = P.idx[n1.replace(/_1$/, '_2')]; if (i2 == null) return;
+      const d = P.wpos[i2].clone().sub(P.wpos[i1]), len = d.length() * 2, az = Math.atan2(d.x, d.z);
+      const lf = Math.max(0.6, Math.min(1.5, len / 0.15)), back = Math.cos(az) < -0.4, front = Math.cos(az) > 0.5;
+      const p1 = new T.Object3D(), p2 = new T.Object3D(); p1.userData.rx0 = 0; p2.userData.rx0 = 0;
+      springs.push({ bones: [p1, p2], st: [{ x: 0, z: 0, vx: 0, vz: 0 }, { x: 0, z: 0, vx: 0, vz: 0 }], g: [1.0 * lf, 1.6 * lf], sx: 0.9, sz: Math.sin(az) * 0.4 + 0.35,
+        k: 105 + (k % 4) * 9, d: 6.5, flutter: 0.13, idleFl: 1.3, idleFq: 0.22, ph: k * 1.37, dragK: back ? 0.6 : front ? 0.3 : 0.45, ay: 0.0018, rest: [0, 0] });
+      hairFile.push({ i: i1, proxy: p1 }, { i: i2, proxy: p2 });
+    });
+    if (fileHair && !strands.length) for (const [nm, az] of [['hair_back', Math.PI], ['hair_left', Math.PI / 2], ['hair_right', -Math.PI / 2], ['hair_front', 0]]) {
       const i = P.idx[nm]; if (i == null) continue;
       const proxy = new T.Object3D(); proxy.userData.rx0 = 0;        // the spring drives this; the file bone copies it
       springs.push(Object.assign({ bones: [proxy] }, spring(az)));
@@ -478,12 +505,20 @@
       if (pi >= 0) b.quaternion.copy(_t.copy(_n[pi]).invert().multiply(Qn));
       else b.quaternion.copy(Qn);
     }
-    // fingers: a loose fist (curl a little tighter while the elbows pump)
+    // fingers: relaxed when the arm hangs (each finger a little more curled than the one before, like a resting hand),
+    // a loose fist while the elbows pump, open when the hand is raised (waving)
     if (rig.glb.fingers.length) {
       for (const f of rig.glb.fingers) {
         const fx = Math.abs(B[f.sd === 'l' ? 'foreL' : 'foreR'].rotation.x), k = Math.min(1, fx / 1.0);
-        const am = P.aim[P.idx['hand_' + f.sd]], open = 1 - 0.75 * ((am && am.ws) || 0);   // open hand when it is raised (waving)
-        const c1 = (0.3 + 0.55 * k) * open, c2 = (0.25 + 0.5 * k) * open;      // relaxed when the arm hangs, a loose fist when it pumps
+        const am = P.aim[P.idx['hand_' + f.sd]], open = 1 - 0.75 * ((am && am.ws) || 0);
+        if (f.digit != null) {
+          const g = (f.digit - 1) * 0.08;
+          const c1 = (f.digit === 0 ? 0.12 + 0.25 * k : 0.3 + g + 0.7 * k) * open, c2 = (f.digit === 0 ? 0.25 + 0.3 * k : 0.42 + g + 0.6 * k) * open;
+          bones[f.i1].quaternion.copy(P.lq[f.i1].q).multiply(f.add).multiply(_fq.setFromAxisAngle(_X, c1));
+          bones[f.i2].quaternion.copy(P.lq[f.i2].q).multiply(_fq.setFromAxisAngle(_X, c2));
+          continue;
+        }
+        const c1 = (0.3 + 0.55 * k) * open, c2 = (0.25 + 0.5 * k) * open;
         if (f.file) {
           bones[f.i1].quaternion.copy(P.lq[f.i1].q).multiply(_fq.setFromAxisAngle(_X, c1));
           bones[f.i2].quaternion.copy(P.lq[f.i2].q).multiply(_fq.setFromAxisAngle(_X, c2));
@@ -510,7 +545,7 @@
   VR._glbDebug = { readGLB, accessor, retarget };
   const PAL = (c) => ({ skin: c, shirt: c, shorts: c, shoe: c, sole: c, detail: c, cap: c, hair: c, ink: 0x161616 });
   const NOVA = { id: 'nova', name: 'نوفا', nameEn: 'Nova', tagline: 'ستايل الشارع ع السكة', taglineEn: 'Street style on the rails', price: 0, palette: PAL(0xe9705c),
-    glb: 'assets/nova.glb?v=20261010c', glbScale: 1.17, cadence: 1.15, glbTune: { foreL: 0.72, foreR: 0.72, handL: 0.15, handR: 0.15, shinL: 1.3, shinR: 1.3 }, hair: { r0: 0.13, r1: 0.24, cy: 0.05, cz: -0.01 },
+    glb: 'assets/nova.glb?v=20261010d', glbScale: 1.17, cadence: 1.45, glbTune: { foreL: 0.72, foreR: 0.72, handL: 0.15, handR: 0.15, shinL: 1.3, shinR: 1.3, thighL: 1.2, thighR: 1.2 }, hair: { r0: 0.13, r1: 0.24, cy: 0.05, cz: -0.01 },
     perk: { ar: 'جرس مشمش يدوم ‎+50%', en: 'Mishmish bell lasts +50%' }, perkMul: { goat: 1.5 },
     // menu stance: relaxed, weight on one leg, arms hanging close with the hands turned to the thighs
     idle(p, t, A) {

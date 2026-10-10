@@ -389,7 +389,7 @@
         const tt = performance.now() * 0.001;
         for (const ch of r.springs) ch.bones.forEach((b, i) => {
           const st = ch.st[i], g = ch.g[i];
-          const fl = Math.sin(tt * (11 + i * 2.3) + i * 1.7) * ch.flutter * (running ? 0.4 + speedN : 0.15) * g;
+          const fl = Math.sin(tt * (11 + i * 2.3) * (running ? 1 : ch.idleFq || 1) + i * 1.7 + (ch.ph || 0)) * ch.flutter * (running ? 0.4 + speedN : ch.idleFl || 0.15) * g;
           const tx = clamp(-acc.z * 0.004 * g + drag * g * (ch.dragK ?? 2.2) + acc.y * (ch.ay || 0) * g + fl, -1.4, 1.4);
           const tz = clamp(acc.x * 0.003 * g + fl * 0.6, -0.8, 0.8);
           st.vx += ((tx - st.x) * ch.k - st.vx * ch.d) * dt;
