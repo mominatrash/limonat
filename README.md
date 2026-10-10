@@ -117,6 +117,7 @@ existing progress carries over.
 | Story mode | `story.js` | «سرّ البيّارة»: 4 chapters × 4 seeded levels, comic panels, radio calls, 16 hidden letters + true ending, bulldozer / drone bosses, goat ally, 3 stars |
 | Seasonal events | `events.js` | Olive harvest (Oct–Nov), Ramadan, winter; Settings -> Season to preview |
 | Daily challenge + ghost | `daily.js` | Same seed for everyone; share link `#c=seed.score.name.data` |
+| GLB characters | `glbchar.js`, `assets/*.glb` | Rigged .glb runners (Nova): tiny built-in .glb reader, the game's skeleton is retargeted onto the model every frame (rest directions aligned, so A-pose models work), hair re-weighted onto spring bones so it bounces |
 | Combat | `combat.js` | Lemons are ammo: the throw button + crosshair appear only when there is a target (drone, biker, Zahran's courier drone, mega-drone, a race friend ahead). A lemonade rush leaves a slippery trail (bulldozer slides back, bikers crash, a race friend behind slips). Downed drones give their lemon back; stomp a biker to take his scooter; the boss's bombs each leave a lemon. Magnet grabs drones, Mishmish bell 🔔 (power-up) clears your lane. Co-op boss has shared HP |
 
 Every feature is a *system* (`VR.SYSTEMS`) with optional hooks:

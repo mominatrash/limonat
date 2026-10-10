@@ -1,0 +1,289 @@
+/* =====================================================================
+ * GLB CHARACTERS — runners made in another tool (a rigged .glb file),
+ * driven by the game's own animation.
+ *
+ * The game animates one invisible skeleton (the same bones every runner
+ * uses: hips, spine, chest, neck, head, arms, legs). Every frame the
+ * model's own bones copy those motions ("retargeting"): each bone takes
+ * the same rotation, measured from the rest pose, after its rest
+ * direction has been lined up with ours (so an A-pose model's arms hang
+ * down when ours do). Hips height and lean carry over too.
+ *
+ * Extra life: the hair gets spring bones of its own (the model came with
+ * a rigid head) so the spikes bounce and stream back while running.
+ *
+ * Small self-contained .glb reader (no loader library needed): one
+ * skinned mesh, PBR material with base colour / normal / metal-rough maps.
+ * ===================================================================== */
+(function () {
+  const T = THREE, D = VR.CHAR_DIM;
+  const SW = 0.205, HW = 0.095;
+  const LAYOUT = [
+    ['hips', null, 0, D.hipY, 0], ['spine', 'hips', 0, D.spine, 0], ['chest', 'spine', 0, D.chest - 0.07, 0],
+    ['neck', 'chest', 0, D.neck, 0], ['head', 'neck', 0, D.headY, 0],
+    ['armL', 'chest', -SW, D.shoulderY, 0], ['foreL', 'armL', 0, -D.upper, 0], ['handL', 'foreL', 0, -D.fore, 0],
+    ['armR', 'chest', SW, D.shoulderY, 0], ['foreR', 'armR', 0, -D.upper, 0], ['handR', 'foreR', 0, -D.fore, 0],
+    ['thighL', 'hips', -HW, -0.02, 0], ['shinL', 'thighL', 0, -D.thigh, 0], ['footL', 'shinL', 0, -D.shin, 0],
+    ['thighR', 'hips', HW, -0.02, 0], ['shinR', 'thighR', 0, -D.thigh, 0], ['footR', 'shinR', 0, -D.shin, 0],
+  ];
+
+  // ------------------------------------------------------------ .glb reading
+  const COMP = { 5120: Int8Array, 5121: Uint8Array, 5122: Int16Array, 5123: Uint16Array, 5125: Uint32Array, 5126: Float32Array };
+  const NUM = { SCALAR: 1, VEC2: 2, VEC3: 3, VEC4: 4, MAT4: 16 };
+  function readGLB(buf) {
+    const dv = new DataView(buf);
+    if (dv.getUint32(0, true) !== 0x46546c67) throw new Error('not a glb');
+    let off = 12, json = null, bin = null;
+    while (off < buf.byteLength) {
+      const len = dv.getUint32(off, true), type = dv.getUint32(off + 4, true);
+      if (type === 0x4e4f534a) json = JSON.parse(new TextDecoder().decode(new Uint8Array(buf, off + 8, len)));
+      else if (type === 0x004e4942) bin = buf.slice(off + 8, off + 8 + len);
+      off += 8 + len;
+    }
+    return { json, bin };
+  }
+  function accessor(g, i) {
+    const a = g.json.accessors[i], bv = g.json.bufferViews[a.bufferView], C = COMP[a.componentType], n = NUM[a.type];
+    const start = (bv.byteOffset || 0) + (a.byteOffset || 0), count = a.count * n;
+    if (bv.byteStride && bv.byteStride !== n * C.BYTES_PER_ELEMENT) {        // interleaved: copy out
+      const out = new C(count), src = new DataView(g.bin), sz = C.BYTES_PER_ELEMENT;
+      const get = { 1: 'getUint8', 2: C === Int16Array ? 'getInt16' : 'getUint16', 4: C === Float32Array ? 'getFloat32' : 'getUint32' }[sz];
+      for (let e = 0; e < a.count; e++) for (let k = 0; k < n; k++) out[e * n + k] = src[get](start + e * bv.byteStride + k * sz, true);
+      return { arr: out, n, norm: !!a.normalized };
+    }
+    return { arr: new C(g.bin.slice(start, start + count * C.BYTES_PER_ELEMENT)), n, norm: !!a.normalized };
+  }
+  async function image(g, i, srgb) {
+    const im = g.json.images[g.json.textures[i].source], bv = g.json.bufferViews[im.bufferView];
+    const blob = new Blob([new Uint8Array(g.bin, bv.byteOffset || 0, bv.byteLength)], { type: im.mimeType });
+    const url = URL.createObjectURL(blob), img = new Image();
+    img.src = url; await img.decode(); URL.revokeObjectURL(url);
+    const tex = new T.Texture(img);
+    tex.flipY = false; tex.colorSpace = srgb ? T.SRGBColorSpace : T.NoColorSpace;
+    tex.wrapS = tex.wrapT = T.RepeatWrapping; tex.anisotropy = 4; tex.needsUpdate = true;
+    return tex;
+  }
+
+  const templates = {};
+  function loadTemplate(def) {
+    if (templates[def.id]) return templates[def.id];
+    const p = (async () => {
+      const buf = await (await fetch(def.glb)).arrayBuffer();
+      const g = readGLB(buf), J = g.json;
+      const prim = J.meshes[0].primitives[0], at = prim.attributes;
+      const geo = new T.BufferGeometry();
+      const pos = accessor(g, at.POSITION), nor = accessor(g, at.NORMAL), uv = accessor(g, at.TEXCOORD_0);
+      const jo = accessor(g, at.JOINTS_0), we = accessor(g, at.WEIGHTS_0);
+      geo.setAttribute('position', new T.BufferAttribute(pos.arr, 3));
+      if (nor) geo.setAttribute('normal', new T.BufferAttribute(nor.arr, 3));
+      geo.setAttribute('uv', new T.BufferAttribute(uv.arr, 2, uv.norm));
+      // skin attributes get rewritten below (hair spring bones), keep them as plain arrays
+      const joints = new Uint16Array(jo.arr.length); joints.set(jo.arr);
+      let weights = we.arr;
+      if (!(weights instanceof Float32Array)) { const m = weights instanceof Uint8Array ? 255 : 65535; weights = Float32Array.from(weights, (x) => x / m); }
+      if (prim.indices != null) geo.setIndex(new T.BufferAttribute(accessor(g, prim.indices).arr, 1));
+      // material
+      const mj = J.materials[prim.material || 0] || {}, pbr = mj.pbrMetallicRoughness || {};
+      const mat = new T.MeshStandardMaterial({ roughness: pbr.roughnessFactor ?? 1, metalness: pbr.metallicFactor ?? 0, side: mj.doubleSided ? T.DoubleSide : T.FrontSide, envMapIntensity: 0.9 });
+      if (pbr.baseColorTexture) mat.map = await image(g, pbr.baseColorTexture.index, true);
+      if (mj.normalTexture) { mat.normalMap = await image(g, mj.normalTexture.index, false); mat.normalScale.set(1, -1); }
+      if (pbr.metallicRoughnessTexture) { const t = await image(g, pbr.metallicRoughnessTexture.index, false); mat.roughnessMap = t; mat.metalnessMap = t; }
+      Object.assign(mat, def.glbMat || {});
+      // skeleton (bind pose from the inverse bind matrices)
+      const sk = J.skins[0], ibmA = accessor(g, sk.inverseBindMatrices).arr;
+      const nodeToJ = {}; sk.joints.forEach((n, i) => (nodeToJ[n] = i));
+      const parent = sk.joints.map(() => -1);
+      sk.joints.forEach((n, i) => (J.nodes[n].children || []).forEach(c => { if (nodeToJ[c] != null) parent[nodeToJ[c]] = i; }));
+      const ibm = sk.joints.map((_, i) => new T.Matrix4().fromArray(ibmA, i * 16));
+      const bind = ibm.map(m => m.clone().invert());
+      const names = sk.joints.map(n => J.nodes[n].name || 'j' + n);
+      return { geo, mat, names, parent, ibm, bind, joints, weights };
+    })();
+    templates[def.id] = p;
+    return p;
+  }
+
+  // ------------------------------------------------------------ retarget setup (once per template)
+  const FQ = new T.Quaternion().setFromAxisAngle(new T.Vector3(0, 1, 0), Math.PI), FQi = FQ.clone().invert();
+  // our bone -> model bone, child used for the rest direction (null = keep the model's own rest orientation)
+  const MAP = [
+    ['hips', 'pelvis', null], ['spine', 'spine_01', 'spine_02'], ['chest', 'spine_03', 'neck_01'], ['neck', 'neck_01', 'head'], ['head', 'head', null],
+    ['armL', 'upperarm_l', 'lowerarm_l'], ['foreL', 'lowerarm_l', 'hand_l'], ['handL', 'hand_l', null],
+    ['armR', 'upperarm_r', 'lowerarm_r'], ['foreR', 'lowerarm_r', 'hand_r'], ['handR', 'hand_r', null],
+    ['thighL', 'thigh_l', 'calf_l'], ['shinL', 'calf_l', 'foot_l'], ['footL', 'foot_l', null],
+    ['thighR', 'thigh_r', 'calf_r'], ['shinR', 'calf_r', 'foot_r'], ['footR', 'foot_r', null],
+  ];
+  const OUR_DIR = { spine: [0, 1, 0], chest: [0, 1, 0], neck: [0, 1, 0], armL: [0, -1, 0], foreL: [0, -1, 0], armR: [0, -1, 0], foreR: [0, -1, 0], thighL: [0, -1, 0], shinL: [0, -1, 0], thighR: [0, -1, 0], shinR: [0, -1, 0] };
+  function prepare(tp, def) {
+    if (tp.prep) return tp.prep;
+    const idx = {}; tp.names.forEach((n, i) => (idx[n] = i));
+    const wpos = tp.bind.map(m => new T.Vector3().setFromMatrixPosition(m));
+    const wq = tp.bind.map(m => { const q = new T.Quaternion(), p = new T.Vector3(), s = new T.Vector3(); m.decompose(p, q, s); return q; });
+    const lq = tp.bind.map((m, i) => {      // bind local transforms
+      const pm = tp.parent[i] >= 0 ? tp.bind[tp.parent[i]].clone().invert().multiply(m) : m.clone();
+      const q = new T.Quaternion(), p = new T.Vector3(), s = new T.Vector3(); pm.decompose(p, q, s); return { q, p, s };
+    });
+    const drive = tp.names.map(() => null);
+    for (const [ours, theirs, child] of MAP) {
+      const i = idx[theirs]; if (i == null) continue;
+      let A = new T.Quaternion();
+      if (child && idx[child] != null && OUR_DIR[ours]) {
+        const dG = wpos[idx[child]].clone().sub(wpos[i]).normalize();
+        const dO = new T.Vector3(...OUR_DIR[ours]).applyQuaternion(FQi);
+        A.setFromUnitVectors(dG, dO);
+      }
+      drive[i] = { ours, A, AQ: A.clone().multiply(wq[i]) };
+    }
+    // scale: match hip height
+    const pel = idx.pelvis != null ? wpos[idx.pelvis] : new T.Vector3(0, 0.9, 0);
+    const scale = (def.glbScale || 1) * D.hipY / pel.y;
+    return (tp.prep = { idx, wpos, wq, lq, drive, scale, pelvis: idx.pelvis });
+  }
+
+  // ------------------------------------------------------------ hair spring bones
+  // The model's head is one rigid bone. Vertices of the hair that stand away from the
+  // skull are re-weighted onto three sprung bones (left / back / right) so they sway.
+  function addHair(tp, P, def) {
+    if (tp.hair !== undefined) return tp.hair;
+    const H = def.hair; if (!H || P.idx.head == null) return (tp.hair = null);
+    const head = P.idx.head, hp = P.wpos[head];
+    const c = new T.Vector3(hp.x, hp.y + (H.cy || 0.06), hp.z + (H.cz || 0));     // skull centre (model space)
+    const pos = tp.geo.attributes.position.array, J = tp.joints, W = tp.weights, n = pos.length / 3;
+    const groups = H.groups || [{ az: Math.PI, name: 'hairB' }, { az: Math.PI / 2, name: 'hairL' }, { az: -Math.PI / 2, name: 'hairR' }, { az: 0, name: 'hairF' }];
+    const base = tp.names.length;
+    const v = new T.Vector3();
+    let moved = 0;
+    for (let k = 0; k < n; k++) {
+      // only vertices fully on the head bone
+      let wh = 0; for (let s = 0; s < 4; s++) if (J[k * 4 + s] === head) wh += W[k * 4 + s];
+      if (wh < 0.98) continue;
+      v.set(pos[k * 3], pos[k * 3 + 1], pos[k * 3 + 2]).sub(c);
+      const r = v.length(), up = v.y / (r || 1);
+      const f = Math.min(1, Math.max(0, (r - H.r0) / (H.r1 - H.r0))) * Math.min(1, Math.max(0, (up + 0.35) / 0.5));
+      if (f <= 0.02) continue;
+      // azimuth around the head (model faces +Z): split between neighbouring groups
+      const az = Math.atan2(v.x, v.z);
+      let best = [];
+      for (let gi = 0; gi < groups.length; gi++) {
+        let d = Math.abs(az - groups[gi].az); if (d > Math.PI) d = 2 * Math.PI - d;
+        best.push([gi, Math.max(0, 1 - d / (Math.PI / 2))]);
+      }
+      best = best.filter(b => b[1] > 0).sort((a, b) => b[1] - a[1]).slice(0, 2);
+      const tot = best.reduce((s, b) => s + b[1], 0) || 1;
+      const ff = f * f * (3 - 2 * f);
+      J[k * 4] = head; W[k * 4] = 1 - ff;
+      for (let s = 1; s < 4; s++) { J[k * 4 + s] = 0; W[k * 4 + s] = 0; }
+      best.forEach(([gi, w], s) => { J[k * 4 + 1 + s] = base + gi; W[k * 4 + 1 + s] = ff * w / tot; });
+      moved++;
+    }
+    tp.hair = { groups, c, base, moved };
+    return tp.hair;
+  }
+
+  // ------------------------------------------------------------ build a runner
+  function build(def) {
+    const root = new T.Group(), B = {};
+    for (const [n, p, x, y, z] of LAYOUT) { const b = new T.Bone(); b.name = n; b.position.set(x, y, z); (p ? B[p] : root).add(b); B[n] = b; }
+    const soles = {};
+    for (const s of ['L', 'R']) {
+      const heel = new T.Object3D(); heel.position.set(0, -D.ankle, 0.06); B['foot' + s].add(heel);
+      const toe = new T.Object3D(); toe.position.set(0, -D.ankle, -0.17); B['foot' + s].add(toe);
+      soles[s] = { heel, toe };
+    }
+    const rig = { root, bones: B, tuft: [], soles, def, scarf: null, springs: [], backGear: null, skinned: true };
+    loadTemplate(def).then((tp) => attach(rig, tp, def)).catch((e) => console.warn('glb character', e));
+    return rig;
+  }
+
+  function attach(rig, tp, def) {
+    const P = prepare(tp, def), H = addHair(tp, P, def);
+    if (!tp.skinSet) {
+      tp.geo.setAttribute('skinIndex', new T.Uint16BufferAttribute(tp.joints, 4));
+      tp.geo.setAttribute('skinWeight', new T.Float32BufferAttribute(tp.weights, 4));
+      tp.geo.computeBoundingSphere(); tp.skinSet = true;
+    }
+    const G = new T.Group(); G.quaternion.copy(FQ); G.scale.setScalar(P.scale);
+    const bones = tp.names.map((n) => { const b = new T.Bone(); b.name = 'g_' + n; return b; });
+    bones.forEach((b, i) => {
+      const L = P.lq[i]; b.position.copy(L.p); b.quaternion.copy(L.q); b.scale.copy(L.s);
+      (tp.parent[i] >= 0 ? bones[tp.parent[i]] : G).add(b);
+    });
+    const allBones = bones.slice(), inverses = tp.ibm.slice();
+    // hair: a fixed pivot at the skull centre (axes = our runner's axes), then the sprung bone
+    const springs = [];
+    if (H) {
+      const head = bones[P.idx.head], headBindInv = tp.bind[P.idx.head].clone().invert();
+      for (const gr of H.groups) {
+        const pivot = new T.Bone();
+        const wm = new T.Matrix4().compose(H.c, FQi.clone(), new T.Vector3(1, 1, 1));   // our axes, in model space
+        const lm = headBindInv.clone().multiply(wm), p = new T.Vector3(), q = new T.Quaternion(), s = new T.Vector3();
+        lm.decompose(p, q, s); pivot.position.copy(p); pivot.quaternion.copy(q);
+        head.add(pivot);
+        const sb = new T.Bone(); sb.name = gr.name; pivot.add(sb);
+        sb.rotation.set(0, 0, 0); sb.userData.rx0 = 0;
+        allBones.push(sb); inverses.push(wm.clone().invert());
+        const back = Math.cos(gr.az) < -0.5, front = Math.cos(gr.az) > 0.5;
+        springs.push({ bones: [sb], st: [{ x: 0, z: 0, vx: 0, vz: 0 }], g: [front ? 0.35 : back ? 0.8 : 0.6], sx: 0.55, sz: Math.sin(gr.az) * 0.5 + 0.4, k: 120, d: 7.5,
+          flutter: 0.05, dragK: back ? 0.55 : 0.35, ay: 0.0016, rest: [0] });
+      }
+    }
+    const mesh = new T.SkinnedMesh(tp.geo, tp.mat);
+    mesh.frustumCulled = false; mesh.castShadow = true;
+    G.add(mesh);
+    const skeleton = new T.Skeleton(allBones, inverses);
+    mesh.bind(skeleton, new T.Matrix4());
+    rig.root.add(G);
+    rig.springs = springs;
+    rig.glb = { G, bones, P, tp };
+    // copy the game's pose onto the model whenever the scene computes its matrices (before drawing and shadows)
+    G.updateMatrixWorld = function (force) { retarget(rig); T.Group.prototype.updateMatrixWorld.call(this, force); };
+    retarget(rig);
+  }
+
+  const _qs = {}, _t = new T.Quaternion(), _n = [], _d = new T.Vector3();
+  function retarget(rig) {
+    const { bones, P, tp } = rig.glb, B = rig.bones;
+    // our bones' rotations in runner space (rest = identity everywhere)
+    for (const [n, p] of LAYOUT) {
+      const q = _qs[n] || (_qs[n] = new T.Quaternion());
+      q.copy(B[n].quaternion); if (p) q.premultiply(_qs[p]);
+    }
+    for (let i = 0; i < bones.length; i++) {
+      const pi = tp.parent[i], Qn = _n[i] || (_n[i] = new T.Quaternion());
+      const dr = P.drive[i];
+      if (dr) {
+        // model-space: (F⁻¹ · ours · F) · A · bind
+        Qn.copy(FQi).multiply(_qs[dr.ours]).multiply(FQ).multiply(dr.AQ);
+      } else {
+        Qn.copy(P.lq[i].q); if (pi >= 0) Qn.premultiply(_n[pi]);
+      }
+      const b = bones[i];
+      if (pi >= 0) b.quaternion.copy(_t.copy(_n[pi]).invert().multiply(Qn));
+      else b.quaternion.copy(Qn);
+    }
+    // hips: bob, crouch and lateral sway carry over (in model units)
+    if (P.pelvis != null) {
+      const pi = tp.parent[P.pelvis], hb = B.hips.position;
+      _d.set(hb.x, hb.y - D.hipY, hb.z).applyQuaternion(FQi).divideScalar(P.scale);
+      if (pi >= 0) _d.applyQuaternion(_t.copy(_n[pi]).invert());
+      bones[P.pelvis].position.copy(P.lq[P.pelvis].p).add(_d);
+    }
+  }
+
+  // ------------------------------------------------------------ register
+  const prevBuild = VR.buildCharacter;
+  VR.buildCharacter = (def) => (def.glb ? build(def) : prevBuild(def));
+  VR.preloadGLBCharacter = (def) => loadTemplate(def);
+  const PAL = (c) => ({ skin: c, shirt: c, shorts: c, shoe: c, sole: c, detail: c, cap: c, hair: c, ink: 0x161616 });
+  const NOVA = { id: 'nova', name: 'نوفا', nameEn: 'Nova', tagline: 'ستايل الشارع ع السكة', taglineEn: 'Street style on the rails', price: 0, palette: PAL(0xe9705c),
+    glb: 'assets/nova.glb', hair: { r0: 0.13, r1: 0.24, cy: 0.05, cz: -0.01 },
+    perk: { ar: 'جرس مشمش يدوم ‎+50%', en: 'Mishmish bell lasts +50%' }, perkMul: { goat: 1.5 } };
+  const at = VR.CHARACTERS.findIndex(c => c.id === 'ninja');
+  VR.CHARACTERS.splice(at >= 0 ? at + 1 : VR.CHARACTERS.length, 0, NOVA);
+  // start downloading the model as soon as the character screen opens (it is a few MB)
+  class GLBPreload {
+    constructor(game) { this.name = 'glbPreload'; this.g = game; }
+    state(s) { if (s === 'character' || s === 'party') for (const c of VR.CHARACTERS) if (c.glb) loadTemplate(c); }
+  }
+  (VR.SYSTEMS = VR.SYSTEMS || []).push(GLBPreload);
+})();
