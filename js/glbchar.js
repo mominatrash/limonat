@@ -209,7 +209,15 @@
     // clavicles shrug with the arm once it rises past ~50° (keeps the shoulder / collar / vest from pinching)
     const clav = {};
     for (const [sd, S] of [['l', 'L'], ['r', 'R']]) if (idx['clavicle_' + sd] != null) clav[idx['clavicle_' + sd]] = { arm: 'arm' + S, dir: tgt('arm' + S) };
-    return (tp.prep = { idx, wpos, wq, lq, drive, scale, pelvis: idx.pelvis, palms, clav });
+    // palm aim: every frame the hand is turned about the forearm so the palm faces where a real hand would
+    // (thigh when hanging, forward when raised / waving, inward when pumping); half the turn goes to the forearm
+    const aim = {};
+    for (const [sd, side] of [['l', 1], ['r', -1]]) {
+      const hi = idx['hand_' + sd], fi = idx['lowerarm_' + sd], mi = idx['middle_01_' + sd];
+      if (hi == null || fi == null || mi == null || !palms[sd]) continue;
+      aim[hi] = { side, fi, pn: palms[sd].clone(), fd: wpos[mi].clone().sub(wpos[hi]).normalize(), wqi: wq[hi].clone().invert() };
+    }
+    return (tp.prep = { idx, wpos, wq, wqi: wq.map(q => q.clone().invert()), lq, drive, scale, pelvis: idx.pelvis, palms, clav, aim });
   }
 
   // ------------------------------------------------------------ finger bones
@@ -387,7 +395,8 @@
     retarget(rig);
   }
 
-  const _qs = {}, _t = new T.Quaternion(), _n = [], _d = new T.Vector3(), _id = new T.Quaternion(), _fq = new T.Quaternion(), _X = new T.Vector3(1, 0, 0), _ax = new T.Vector3();
+  const _qs = {}, _t = new T.Quaternion(), _n = [], _d = new T.Vector3(), _id = new T.Quaternion(), _fq = new T.Quaternion(), _X = new T.Vector3(1, 0, 0), _ax = new T.Vector3(),
+    _fd = new T.Vector3(), _pn = new T.Vector3(), _want = new T.Vector3(), _c = new T.Vector3();
   function retarget(rig) {
     const { bones, P, tp } = rig.glb, B = rig.bones;
     // our bones' rotations in runner space (rest = identity everywhere)
@@ -417,6 +426,28 @@
           }
         }
       }
+      const am = P.aim[i];
+      if (am) {
+        _fq.copy(Qn).multiply(am.wqi);                                   // bind -> now (model space)
+        _fd.copy(am.fd).applyQuaternion(_fq); _pn.copy(am.pn).applyQuaternion(_fq);
+        const w = Math.max(0, Math.min(1, (_fd.y - 0.05) / 0.6)), ws = w * w * (3 - 2 * w); am.ws = ws;
+        // hanging: palm to the thigh (a little back); raised: palm to the front; pumping forward: palm inward
+        _want.set(-am.side * (1 - ws), 0, -0.3 * (1 - ws) * (1 - Math.max(0, _fd.z)) + ws).normalize();
+        _ax.copy(_want).addScaledVector(_fd, -_want.dot(_fd));
+        _pn.addScaledVector(_fd, -_pn.dot(_fd));
+        if (_ax.lengthSq() > 1e-4 && _pn.lengthSq() > 1e-4) {
+          _ax.normalize(); _pn.normalize();
+          let ang = Math.acos(Math.max(-1, Math.min(1, _pn.dot(_ax))));
+          if (_c.crossVectors(_pn, _ax).dot(_fd) < 0) ang = -ang;
+          ang = Math.max(-2.2, Math.min(2.2, ang));
+          // forearm axis (elbow -> wrist) now
+          _c.copy(P.wpos[i]).sub(P.wpos[am.fi]).normalize().applyQuaternion(_t.copy(_n[am.fi]).multiply(P.wqi[am.fi]));
+          _n[am.fi].premultiply(_fq.setFromAxisAngle(_c, ang * 0.5));
+          const fp = tp.parent[am.fi];
+          bones[am.fi].quaternion.copy(fp >= 0 ? _t.copy(_n[fp]).invert().multiply(_n[am.fi]) : _n[am.fi]);
+          Qn.premultiply(_fq.setFromAxisAngle(_c, ang));
+        }
+      }
       const b = bones[i];
       if (pi >= 0) b.quaternion.copy(_t.copy(_n[pi]).invert().multiply(Qn));
       else b.quaternion.copy(Qn);
@@ -425,7 +456,8 @@
     if (rig.glb.fingers.length) {
       for (const f of rig.glb.fingers) {
         const fx = Math.abs(B[f.sd === 'l' ? 'foreL' : 'foreR'].rotation.x), k = Math.min(1, fx / 1.0);
-        const c1 = 0.3 + 0.55 * k, c2 = 0.25 + 0.5 * k;      // relaxed when the arm hangs, a loose fist when it pumps
+        const am = P.aim[P.idx['hand_' + f.sd]], open = 1 - 0.75 * ((am && am.ws) || 0);   // open hand when it is raised (waving)
+        const c1 = (0.3 + 0.55 * k) * open, c2 = (0.25 + 0.5 * k) * open;      // relaxed when the arm hangs, a loose fist when it pumps
         if (f.file) {
           bones[f.i1].quaternion.copy(P.lq[f.i1].q).multiply(_fq.setFromAxisAngle(_X, c1));
           bones[f.i2].quaternion.copy(P.lq[f.i2].q).multiply(_fq.setFromAxisAngle(_X, c2));
@@ -462,8 +494,8 @@
       A.set(p, 'thighR', 7, -5, 4); A.set(p, 'shinR', -16 - Math.max(0, sh) * 4); A.set(p, 'footR', 6);
       A.set(p, 'spine', -2 + br * 0.6, -2, -2); A.set(p, 'chest', 2 + br * 1.2, -2, -2);
       A.set(p, 'head', 3 + Math.sin(t * 1.4) * 2, -10 + lk * 12, 5);
-      A.set(p, 'armL', -3 + br, 0, -3 - br * 0.8); A.set(p, 'foreL', 10 + br * 2); A.set(p, 'handL', 0, 60, 0);
-      A.set(p, 'armR', -3 + br, 0, 3 + br * 0.8); A.set(p, 'foreR', 10 + br * 2); A.set(p, 'handR', 0, -60, 0);
+      A.set(p, 'armL', -3 + br, 0, -3 - br * 0.8); A.set(p, 'foreL', 10 + br * 2); A.set(p, 'handL', 0, 0, 0);
+      A.set(p, 'armR', -3 + br, 0, 3 + br * 0.8); A.set(p, 'foreR', 10 + br * 2); A.set(p, 'handR', 0, 0, 0);
     } };
   const at = VR.CHARACTERS.findIndex(c => c.id === 'ninja');
   VR.CHARACTERS.splice(at >= 0 ? at + 1 : VR.CHARACTERS.length, 0, NOVA);
