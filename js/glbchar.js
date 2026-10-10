@@ -108,12 +108,13 @@
   // our bone -> model bone, child used for the rest direction (null = keep the model's own rest orientation)
   const MAP = [
     ['hips', 'pelvis', null], ['spine', 'spine_01', 'spine_02'], ['chest', 'spine_03', 'neck_01'], ['neck', 'neck_01', 'head'], ['head', 'head', null],
-    ['armL', 'upperarm_l', 'lowerarm_l'], ['foreL', 'lowerarm_l', 'hand_l'], ['handL', 'hand_l', null],
-    ['armR', 'upperarm_r', 'lowerarm_r'], ['foreR', 'lowerarm_r', 'hand_r'], ['handR', 'hand_r', null],
+    ['armL', 'upperarm_l', 'lowerarm_l'], ['foreL', 'lowerarm_l', 'hand_l'], ['handL', 'hand_l', 'middle_01_l'],
+    ['armR', 'upperarm_r', 'lowerarm_r'], ['foreR', 'lowerarm_r', 'hand_r'], ['handR', 'hand_r', 'middle_01_r'],
     ['thighL', 'thigh_l', 'calf_l'], ['shinL', 'calf_l', 'foot_l'], ['footL', 'foot_l', null],
     ['thighR', 'thigh_r', 'calf_r'], ['shinR', 'calf_r', 'foot_r'], ['footR', 'foot_r', null],
   ];
-  const OUR_DIR = { spine: [0, 1, 0], chest: [0, 1, 0], neck: [0, 1, 0], armL: [0, -1, 0], foreL: [0, -1, 0], armR: [0, -1, 0], foreR: [0, -1, 0], thighL: [0, -1, 0], shinL: [0, -1, 0], thighR: [0, -1, 0], shinR: [0, -1, 0] };
+  // arms hang a little away from the body (wide sleeves and vest), hands continue the forearm
+  const OUR_DIR = { spine: [0, 1, 0], chest: [0, 1, 0], neck: [0, 1, 0], armL: [-0.26, -1, 0], foreL: [-0.2, -1, 0], handL: [-0.12, -1, 0.05], armR: [0.26, -1, 0], foreR: [0.2, -1, 0], handR: [0.12, -1, 0.05], thighL: [0, -1, 0], shinL: [0, -1, 0], thighR: [0, -1, 0], shinR: [0, -1, 0] };
   function prepare(tp, def) {
     if (tp.prep) return tp.prep;
     const idx = {}; tp.names.forEach((n, i) => (idx[n] = i));
@@ -129,8 +130,10 @@
       let A = new T.Quaternion();
       if (child && idx[child] != null && OUR_DIR[ours]) {
         const dG = wpos[idx[child]].clone().sub(wpos[i]).normalize();
-        const dO = new T.Vector3(...OUR_DIR[ours]).applyQuaternion(FQi);
+        const dO = new T.Vector3(...OUR_DIR[ours]).normalize().applyQuaternion(FQi);
         A.setFromUnitVectors(dG, dO);
+        const tw = (def.glbTwist || {})[ours];
+        if (tw) A.premultiply(new T.Quaternion().setFromAxisAngle(dO, tw));     // turn about the bone (palms inward etc.)
       }
       drive[i] = { ours, A, AQ: A.clone().multiply(wq[i]) };
     }
@@ -236,17 +239,21 @@
     rig.springs = springs;
     rig.glb = { G, bones, P, tp };
     // copy the game's pose onto the model whenever the scene computes its matrices (before drawing and shadows)
-    G.updateMatrixWorld = function (force) { retarget(rig); T.Group.prototype.updateMatrixWorld.call(this, force); };
+    G.updateMatrixWorld = function (force) { if (!rig.glbFreeze) retarget(rig); T.Group.prototype.updateMatrixWorld.call(this, force); };
     retarget(rig);
   }
 
-  const _qs = {}, _t = new T.Quaternion(), _n = [], _d = new T.Vector3();
+  const _qs = {}, _t = new T.Quaternion(), _n = [], _d = new T.Vector3(), _id = new T.Quaternion();
   function retarget(rig) {
     const { bones, P, tp } = rig.glb, B = rig.bones;
     // our bones' rotations in runner space (rest = identity everywhere)
+    const tune = rig.def.glbTune || {};
     for (const [n, p] of LAYOUT) {
       const q = _qs[n] || (_qs[n] = new T.Quaternion());
-      q.copy(B[n].quaternion); if (p) q.premultiply(_qs[p]);
+      q.copy(B[n].quaternion);
+      const k = tune[n];
+      if (k != null) q.slerp(_id, 1 - k);                  // soften (k < 1) a joint's bend for this model's proportions
+      if (p) q.premultiply(_qs[p]);
     }
     for (let i = 0; i < bones.length; i++) {
       const pi = tp.parent[i], Qn = _n[i] || (_n[i] = new T.Quaternion());
@@ -274,9 +281,10 @@
   const prevBuild = VR.buildCharacter;
   VR.buildCharacter = (def) => (def.glb ? build(def) : prevBuild(def));
   VR.preloadGLBCharacter = (def) => loadTemplate(def);
+  VR._glbDebug = { readGLB, accessor, retarget };
   const PAL = (c) => ({ skin: c, shirt: c, shorts: c, shoe: c, sole: c, detail: c, cap: c, hair: c, ink: 0x161616 });
   const NOVA = { id: 'nova', name: 'نوفا', nameEn: 'Nova', tagline: 'ستايل الشارع ع السكة', taglineEn: 'Street style on the rails', price: 0, palette: PAL(0xe9705c),
-    glb: 'assets/nova.glb', hair: { r0: 0.13, r1: 0.24, cy: 0.05, cz: -0.01 },
+    glb: 'assets/nova.glb', glbTune: { foreL: 0.72, foreR: 0.72, handL: 0.5, handR: 0.5 }, glbTwist: { handL: -1.3, handR: 1.3, foreL: -0.65, foreR: 0.65 }, hair: { r0: 0.13, r1: 0.24, cy: 0.05, cz: -0.01 },
     perk: { ar: 'جرس مشمش يدوم ‎+50%', en: 'Mishmish bell lasts +50%' }, perkMul: { goat: 1.5 } };
   const at = VR.CHARACTERS.findIndex(c => c.id === 'ninja');
   VR.CHARACTERS.splice(at >= 0 ? at + 1 : VR.CHARACTERS.length, 0, NOVA);
