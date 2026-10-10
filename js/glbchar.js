@@ -452,7 +452,7 @@
   VR._glbDebug = { readGLB, accessor, retarget };
   const PAL = (c) => ({ skin: c, shirt: c, shorts: c, shoe: c, sole: c, detail: c, cap: c, hair: c, ink: 0x161616 });
   const NOVA = { id: 'nova', name: 'نوفا', nameEn: 'Nova', tagline: 'ستايل الشارع ع السكة', taglineEn: 'Street style on the rails', price: 0, palette: PAL(0xe9705c),
-    glb: 'assets/nova.glb', glbTune: { foreL: 0.72, foreR: 0.72, handL: 0.15, handR: 0.15 }, hair: { r0: 0.13, r1: 0.24, cy: 0.05, cz: -0.01 },
+    glb: 'assets/nova.glb', glbScale: 1.17, glbTune: { foreL: 0.72, foreR: 0.72, handL: 0.15, handR: 0.15 }, hair: { r0: 0.13, r1: 0.24, cy: 0.05, cz: -0.01 },
     perk: { ar: 'جرس مشمش يدوم ‎+50%', en: 'Mishmish bell lasts +50%' }, perkMul: { goat: 1.5 },
     // menu stance: relaxed, weight on one leg, arms hanging close with the hands turned to the thighs
     idle(p, t, A) {
