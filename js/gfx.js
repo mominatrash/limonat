@@ -743,6 +743,7 @@ window.VR = window.VR || {};
       for (let i = 0; i < this.levels; i++) this.mips.push(new T.WebGLRenderTarget(4, 4, opts));
       this.target = new T.WebGLRenderTarget(4, 4, { type: T.HalfFloatType, samples: 4, minFilter: T.LinearFilter, magFilter: T.LinearFilter });
       this.setSamples = (n) => { if (this.target.samples !== n) { this.target.dispose(); this.target.samples = n; } };
+      this.setQualitySamples = (n) => { this.wantSamples = n; this.setSamples(this.lastPr >= 1.75 ? Math.min(n, 2) : n); };
 
       this.brightMat = new T.ShaderMaterial({
         uniforms: { tSrc: { value: null }, uTexel: { value: new T.Vector2() }, uThreshold: { value: 1.35 }, uKnee: { value: 0.5 } },
@@ -847,7 +848,13 @@ window.VR = window.VR || {};
     setSize(w, h, pr) {
       const W = Math.max(1, Math.floor(w * pr)), H = Math.max(1, Math.floor(h * pr));
       this.target.setSize(W, H);
-      let mw = W >> 1, mh = H >> 1;
+      // PERF: on dense screens the bloom chain starts at 1/4 resolution. The bright pass samples
+      // +-1 full-res texel around each output pixel, which bilinearly averages exactly the 4x4
+      // block it covers, and the glow is wide and soft anyway -> same look, ~4x fewer bloom pixels.
+      // MSAA: at >= 1.75 px per CSS pixel, 2 samples (= 8 per CSS pixel) look the same as 4.
+      const sh = pr >= 1.5 ? 2 : 1; this.lastPr = pr;
+      this.setSamples(pr >= 1.75 ? Math.min(this.wantSamples ?? 4, 2) : (this.wantSamples ?? 4));
+      let mw = W >> sh, mh = H >> sh;
       for (let i = 0; i < this.levels; i++) {
         this.mips[i].setSize(Math.max(1, mw), Math.max(1, mh));
         mw >>= 1; mh >>= 1;

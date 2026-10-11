@@ -36,6 +36,14 @@
       #include <colorspace_fragment>
     }`;
 
+  class Particle {
+    constructor() { this.kind = ''; this.reset(); }
+    reset() {
+      this.x = 0; this.y = 0; this.z = 0; this.vx = 0; this.vy = 0; this.vz = 0; this.g = 0; this.drag = 0;
+      this.life = 1; this.age = 0; this.size = 0.3; this.grow = 0; this.r = 1; this.gg = 1; this.b = 1; this.a = 1;
+      this.fade = 1; this.rot = 0; this.spin = 0; this.shape = 0; this.kind = '';
+    }
+  }
   class Points {
     constructor(scene, max, additive) {
       this.max = max;
@@ -58,10 +66,15 @@
       scene.add(this.mesh);
       this.geo = g;
       this.p = []; // live particles
+      this.pool = [];
     }
+    // PERF: particles are pooled objects with ONE fixed shape, so V8 keeps their numbers unboxed
+    // (mixed shapes made every position write allocate -> ~60 KB of garbage per frame -> GC hitches)
     spawn(o) {
-      if (this.p.length >= this.max) this.p.shift();
-      this.p.push(Object.assign({ vx: 0, vy: 0, vz: 0, g: 0, drag: 0, life: 1, age: 0, size: 0.3, grow: 0, r: 1, gg: 1, b: 1, a: 1, fade: 1, rot: 0, spin: 0, shape: 0 }, o));
+      const q = this.p.length >= this.max ? this.p.shift() : (this.pool.pop() || new Particle());
+      q.reset();
+      for (const k in o) q[k] = o[k];
+      this.p.push(q);
     }
     update(dt) {
       const P = this.p;
@@ -69,7 +82,7 @@
       for (let i = 0; i < P.length; i++) {
         const q = P[i];
         q.age += dt;
-        if (q.age >= q.life) continue;
+        if (q.age >= q.life) { this.pool.push(q); continue; }
         const d = Math.max(0, 1 - q.drag * dt);
         q.vx *= d; q.vy = q.vy * d - q.g * dt; q.vz *= d;
         q.x += q.vx * dt; q.y += q.vy * dt; q.z += q.vz * dt;
@@ -93,10 +106,11 @@
         at.needsUpdate = true;
       }
     }
-    clear() { this.p.length = 0; this.geo.setDrawRange(0, 0); }
+    clear() { for (let i = 0; i < this.p.length; i++) this.pool.push(this.p[i]); this.p.length = 0; this.geo.setDrawRange(0, 0); }
   }
 
   const ATTRS = ['position', 'aColor', 'aSize', 'aRot', 'aShape'];
+  const AMB_TARGET = { petals: 90, leaves: 70, snow: 380, sand: 140, fireflies: 110 };
   const tmpC = new T.Color();
   const _m4 = new T.Matrix4();
   function rgb(hex, mul = 1) { tmpC.setHex(hex); return { r: tmpC.r * mul, gg: tmpC.g * mul, b: tmpC.b * mul }; }
@@ -183,17 +197,19 @@
     ambient(dt, cam, speed) {
       const type = this.ambType;
       this.ambT += dt;
-      const target = { petals: 90, leaves: 70, snow: 380, sand: 140, fireflies: 110 }[type] || 0;
+      const target = AMB_TARGET[type] || 0;
       const P = type === 'fireflies' ? this.ambGlow : this.amb;
       const other = type === 'fireflies' ? this.amb : this.ambGlow;
       // fade out particles of the other kind
-      for (const q of other.p) q.life = Math.min(q.life, q.age + 0.5);
+      for (let i = 0; i < other.p.length; i++) { const q = other.p[i]; q.life = Math.min(q.life, q.age + 0.5); }
       const box = (q) => {
         q.x = cam.position.x + (Math.random() - 0.5) * 50;
         q.z = cam.position.z - 5 - Math.random() * 70;
         q.y = type === 'snow' || type === 'leaves' || type === 'petals' ? 2 + Math.random() * 16 : 0.3 + Math.random() * 6;
       };
-      while (P.p.filter ? P.p.reduce((n, q) => n + (q.kind === type ? 1 : 0), 0) < target && P.p.length < P.max : false) {
+      let have = 0; for (let i = 0; i < P.p.length; i++) if (P.p[i].kind === type) have++;
+      while (have < target && P.p.length < P.max) {
+        have++;
         const q = { kind: type, age: 0, life: 6 + Math.random() * 6, fade: 1, rot: Math.random() * 6, drag: 0, g: 0, grow: 0, a: 1, vx: 0, vy: 0, vz: 0 };
         box(q);
         if (type === 'snow') Object.assign(q, { vy: -1.2 - Math.random(), vx: 0.4, size: 0.1 + Math.random() * 0.1, shape: 0, a: 0.9 }, rgb(0xffffff));
@@ -204,7 +220,8 @@
         else break;
         P.spawn(q);
       }
-      for (const q of P.p) {
+      for (let i = 0; i < P.p.length; i++) {
+        const q = P.p[i];
         if (q.kind !== type) { q.life = Math.min(q.life, q.age + 0.6); continue; }
         if (type === 'fireflies') { q.vx = Math.sin(this.ambT * 1.3 + q.rot * 7) * 0.6; q.vy = Math.cos(this.ambT * 1.1 + q.rot * 5) * 0.4; q.a = 0.5 + 0.5 * Math.sin(this.ambT * 4 + q.rot * 11); }
         if (type === 'leaves' || type === 'petals') q.vx = Math.sin(this.ambT * 1.5 + q.rot) * 1.2 + 0.6;

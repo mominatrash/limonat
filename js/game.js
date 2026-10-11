@@ -149,7 +149,7 @@
       VR.Audio.setEnabled('sfx', s.sfx);
       VR.Audio.setEnabled('music', s.music);
       C.CHUNKS_AHEAD = Q.chunks;
-      this.post.setSamples(Q.msaa);
+      this.post.setQualitySamples(Q.msaa);
       this.renderer.shadowMap.enabled = Q.shadows > 0;
       this.sun.castShadow = Q.shadows > 0;
       if (Q.shadows && this.sun.shadow.mapSize.x !== Q.shadows) {
@@ -743,7 +743,24 @@
       }
     }
 
+    // PERF: the shadow pass shares ONE depth material between plain, instanced (coins, lemons) and
+    // skinned (characters) meshes, so three.js re-resolved its shader several times every frame
+    // (string keys -> garbage -> GC hitches). Each kind gets its own depth material instead.
+    assignDepthMats() {
+      const D = this._depthMats || (this._depthMats = {
+        inst: new T.MeshDepthMaterial({ depthPacking: T.RGBADepthPacking }),
+        skin: new T.MeshDepthMaterial({ depthPacking: T.RGBADepthPacking }),
+      });
+      const visit = this._dmVisit || (this._dmVisit = (o) => {
+        if (!o.castShadow || o.customDepthMaterial) return;
+        if (o.isInstancedMesh) o.customDepthMaterial = D.inst;
+        else if (o.isSkinnedMesh) o.customDepthMaterial = D.skin;
+      });
+      this.scene.traverse(visit);
+    }
+
     render(dt) {
+      if ((this._dmT = (this._dmT || 0) - dt) <= 0) { this._dmT = 1; this.assignDepthMats(); }
       const cu = this.post.compUniforms, L = this.look;
       this.fxCA = Math.max(0, this.fxCA - dt * 2.5);
       this.fxFlash = Math.max(0, this.fxFlash - dt * 2);
@@ -886,7 +903,7 @@
 
     // coins etc. are hidden behind the menu so they don't float in front of the camera
     showPickups(on) {
-      this.collect.coins.mesh.visible = on; this.collect.gems.mesh.visible = on;
+      this.collect.coins.mesh.visible = on; this.collect.coinShadow.visible = on; this.collect.gems.mesh.visible = on;
       for (const p of this.collect.powerups) p.obj.visible = on;
     }
 
@@ -1030,7 +1047,12 @@
       const cam = this.camera, cp = cam.position.clone(), cq = cam.quaternion.clone();
       cam.position.set(0, 5, 10); cam.lookAt(0, 1, -12); cam.updateMatrixWorld();
       try {
+        this.assignDepthMats();
+        // compile for the target the scene is really drawn into (the post HDR buffer when post is on);
+        // compiling for the screen built a second, never-used variant of every shader
+        r.setRenderTarget(this.Q.post ? this.post.target : null);
         r.compile(this.scene, cam);
+        r.setRenderTarget(null);
         if (this.Q.post) this.post.render(this.scene, cam, 0);      // also builds shadow-depth programs + uploads textures
         else { r.setRenderTarget(null); r.render(this.scene, cam); }
       } catch (e) { console.warn('warmup', e); }

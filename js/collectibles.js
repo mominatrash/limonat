@@ -166,6 +166,15 @@
       const coinMat = new T.MeshStandardMaterial({ vertexColors: true, metalness: 1, roughness: 0.28, emissive: 0x7a4c00, emissiveIntensity: 0.8, envMapIntensity: 1.6 });
       this.coins = new InstancedSet(scene, coinGeometry(), coinMat, 700);
       this.coinMat = coinMat;
+      // PERF: coins don't cast shadows themselves (592 triangles each, ~130 of them up to 240 m ahead).
+      // A 48-triangle stand-in casts the shadow, only for the coins inside the shadow area.
+      // It draws nothing in the normal pass (no colour, no depth), so the picture is unchanged.
+      this.coins.mesh.castShadow = false;
+      const shGeo = new T.CylinderGeometry(0.38, 0.38, 0.08, 12, 1).rotateX(Math.PI / 2);
+      this.coinShadow = new T.InstancedMesh(shGeo, new T.MeshBasicMaterial({ colorWrite: false, depthWrite: false }), 200);
+      this.coinShadow.castShadow = true; this.coinShadow.frustumCulled = false; this.coinShadow.count = 0;
+      this.coinShadow.instanceMatrix.setUsage(T.DynamicDrawUsage);
+      scene.add(this.coinShadow);
       const lemonMat = new T.MeshStandardMaterial({ vertexColors: true, roughness: 0.25, emissive: 0xffc400, emissiveIntensity: 0.55 });
       this.gems = new InstancedSet(scene, lemonGeometry(), lemonMat, 60);
 
@@ -275,6 +284,7 @@
       e.set(0, this.time * 3.2, 0); q.setFromEuler(e);
       const coins = this.coins;
       const reach = player.sliding ? 0.8 : 1.2;
+      const sh = this.coinShadow, shMax = sh.instanceMatrix.count; let ns = 0;
       for (const i of coins.active) {
         const c = coins.items[i];
         const dz = c.z - pz;
@@ -294,9 +304,12 @@
         }
         v.set(c.x, c.y + Math.sin(this.time * 4 + c.z) * 0.06, c.z);
         m4.compose(v, q, s); coins.mesh.setMatrixAt(i, m4);
+        if (c.z - pz > -58 && c.z - pz < 14 && ns < shMax) sh.setMatrixAt(ns++, m4);
       }
       coins.mesh.instanceMatrix.needsUpdate = true;
       coins.trim();
+      sh.count = ns;
+      if (ns) { const im = sh.instanceMatrix; im.updateRange.offset = 0; im.updateRange.count = ns * 16; im.needsUpdate = true; }
 
       // --- bonus lemons
       for (const i of this.gems.active) {
