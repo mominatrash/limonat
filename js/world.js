@@ -59,6 +59,18 @@
         }
       }
       for (const t in VR.OBSTACLE_TYPES) this.lazyPool('obs_' + t, () => VR.OBSTACLE_TYPES[t].build());
+      // mobile look: no shadow map, so trains / obstacles get a soft blob on the ground instead
+      if (VR.MOBILE_LOOK) for (const t in VR.OBSTACLE_TYPES) {
+        const key = 'obs_' + t, make = this.pool.factories[key];
+        this.pool.define(key, () => {
+          const o = make(); o.updateMatrixWorld(true);
+          const bb = new THREE.Box3().setFromObject(o), sz = bb.getSize(new THREE.Vector3()), c = bb.getCenter(new THREE.Vector3());
+          if (sz.x > 0.2 && sz.z > 0.2) {
+            const b = VR.blobShadow(sz.x + 0.7, sz.z + 0.9); b.position.set(c.x, Math.max(0, bb.min.y) + 0.03, c.z); b.updateMatrix(); o.add(b);
+          }
+          return o;
+        });
+      }
       VR.TRAIN_COLORS.forEach((col, ci) => {
         for (const kind in VR.CAR_BUILDERS) this.lazyPool(`car_${kind}_${ci}`, () => VR.CAR_BUILDERS[kind](col));
       });

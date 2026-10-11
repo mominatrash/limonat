@@ -25,7 +25,7 @@
     constructor() {
       this.state = 'loading';
       const coarse = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-      this.settings = Object.assign({ sfx: true, music: true, quality: coarse ? 'medium' : 'high', fps: false, drs: false }, UI.store.get('settings', {}));
+      this.settings = Object.assign({ sfx: true, music: true, quality: coarse ? 'medium' : 'high', fps: false, drs: false, look: 'classic' }, UI.store.get('settings', {}));
       if (!QUALITY[this.settings.quality]) this.settings.quality = 'medium';
       this.best = UI.store.get('best', 0);
       this.bank = UI.store.get('bank', 0);
@@ -69,7 +69,7 @@
     // ------------------------------------------------------------ setup
     initRenderer() {
       const holder = document.getElementById('game');
-      this.renderer = new T.WebGLRenderer({ antialias: this.settings.quality === 'low', powerPreference: 'high-performance', stencil: false });
+      this.renderer = new T.WebGLRenderer({ antialias: this.settings.quality === 'low' || VR.MOBILE_LOOK, powerPreference: 'high-performance', stencil: false });
       this.renderer.outputColorSpace = T.SRGBColorSpace;
       this.renderer.toneMapping = T.ACESFilmicToneMapping;
       this.renderer.shadowMap.type = T.PCFSoftShadowMap;
@@ -106,7 +106,12 @@
       this.resize();
     }
 
-    get Q() { return QUALITY[this.settings.quality]; }
+    get Q() {
+      const q = QUALITY[this.settings.quality];
+      if (!VR.MOBILE_LOOK) return q;
+      // mobile look: no HDR post chain, no shadow map, a shorter draw distance (the world bends away)
+      return q.mob || (q.mob = Object.assign({}, q, { post: false, shadows: 0, msaa: 0, chunks: Math.min(q.chunks, 4) }));
+    }
 
     // broadcast an event to every feature system that implements it
     emit(ev, a, b, c) { if (!this.sys) return; for (const s of this.sys) if (s[ev]) s[ev](a, b, c); }
@@ -150,6 +155,7 @@
       VR.Audio.setEnabled('music', s.music);
       C.CHUNKS_AHEAD = Q.chunks;
       this.post.setQualitySamples(Q.msaa);
+      if (VR.charUniforms && VR.charUniforms.uHeroA) VR.charUniforms.uHeroA.value = Q.post ? 0 : 1;
       this.renderer.shadowMap.enabled = Q.shadows > 0;
       this.sun.castShadow = Q.shadows > 0;
       if (Q.shadows && this.sun.shadow.mapSize.x !== Q.shadows) {
@@ -162,6 +168,7 @@
       UI.setSwitch('optMusic', s.music);
       UI.setSwitch('optFps', s.fps);
       UI.setSwitch('optDrs', s.drs);
+      UI.setSwitch('optLook', !!VR.MOBILE_LOOK);
       if (!s.drs) { this.drsScale = 1; this.drsRun = 1; }
       UI.setQuality(s.quality);
       UI.fps(s.fps);
@@ -217,6 +224,10 @@
       document.querySelectorAll('#optQuality button').forEach(b => b.addEventListener('click', () => { VR.Audio.play('click'); this.settings.quality = b.dataset.q; this.applySettings(); }));
       document.querySelectorAll('#optLang button').forEach(b => b.addEventListener('click', () => { VR.Audio.play('click'); UI.setLang(b.dataset.l); }));
       UI.bind('optFps', () => { this.settings.fps = !this.settings.fps; this.applySettings(); });
+      UI.bind('optLook', () => {     // switching the look rebuilds every shader -> reload
+        this.settings.look = VR.MOBILE_LOOK ? 'classic' : 'mobile'; UI.store.set('settings', this.settings);
+        const u = new URL(location.href); u.searchParams.delete('look'); location.replace(u.toString());
+      });
       UI.bind('optDrs', () => { this.settings.drs = !this.settings.drs; this.autoDowngraded = false; this.applySettings(); });
       VR.Input.onPause(() => { if (this.state === 'playing') this.pause(); else if (this.state === 'paused') this.resume(); });
       document.addEventListener('visibilitychange', () => { if (document.hidden && this.state === 'playing') this.pause(); });

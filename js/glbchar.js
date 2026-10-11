@@ -93,8 +93,8 @@
       // so it keeps its true colours in every biome — at night and in tunnels too (uDim settles it a touch)
       mat.toneMapped = false;
       mat.onBeforeCompile = (sh) => {
-        if (VR.charUniforms) sh.uniforms.uDim = VR.charUniforms.uDim; else sh.uniforms.uDim = { value: 0 };
-        sh.fragmentShader = 'uniform float uDim;\n' + sh.fragmentShader.replace('#include <opaque_fragment>', `
+        sh.uniforms.uDim = VR.charUniforms ? VR.charUniforms.uDim : { value: 0 }; sh.uniforms.uHeroA = VR.charUniforms ? VR.charUniforms.uHeroA : { value: 0 };
+        sh.fragmentShader = 'uniform float uDim, uHeroA;\n' + sh.fragmentShader.replace('#include <opaque_fragment>', `
           vec3 nN = normalize(normal);
           vec3 nKey = vec3(-0.32, 0.58, 0.78);
           #if NUM_DIR_LIGHTS > 0
@@ -108,7 +108,7 @@
           float nRim = pow(1.0 - clamp(dot(nN, nV), 0.0, 1.0), 4.0);
           float nSpec = pow(max(dot(nN, normalize(nKey + nV)), 0.0), mix(48.0, 6.0, roughnessFactor)) * (1.0 - roughnessFactor) * 0.22;
           nShade = nShade * (1.0 - uDim);
-          gl_FragColor = vec4(diffuseColor.rgb * pow(nShade, vec3(2.2)) + vec3(nSpec + nRim * 0.05) * (1.0 - uDim), 0.0);`);
+          gl_FragColor = vec4(diffuseColor.rgb * pow(nShade, vec3(2.2)) + vec3(nSpec + nRim * 0.05) * (1.0 - uDim), uHeroA);`);
       };
       mat.customProgramCacheKey = () => 'glbCharShade';
       // skeleton (bind pose from the inverse bind matrices)
@@ -545,7 +545,7 @@
   VR._glbDebug = { readGLB, accessor, retarget };
   const PAL = (c) => ({ skin: c, shirt: c, shorts: c, shoe: c, sole: c, detail: c, cap: c, hair: c, ink: 0x161616 });
   const NOVA = { id: 'nova', name: 'رين', nameEn: 'Rayne', tagline: 'ستايل الشارع ع السكة', taglineEn: 'Street style on the rails', price: 0, palette: PAL(0xe9705c),
-    glb: 'assets/nova.glb?v=20261011a', glbScale: 1.17, cadence: 1.45, glbTune: { foreL: 0.72, foreR: 0.72, handL: 0.15, handR: 0.15, shinL: 1.3, shinR: 1.3, thighL: 1.2, thighR: 1.2 }, hair: { r0: 0.13, r1: 0.24, cy: 0.05, cz: -0.01 },
+    glb: 'assets/nova.glb?v=20261011c', glbScale: 1.17, cadence: 1.45, glbTune: { foreL: 0.72, foreR: 0.72, handL: 0.15, handR: 0.15, shinL: 1.3, shinR: 1.3, thighL: 1.2, thighR: 1.2 }, hair: { r0: 0.13, r1: 0.24, cy: 0.05, cz: -0.01 },
     perk: { ar: 'جرس مشمش يدوم ‎+50%', en: 'Mishmish bell lasts +50%' }, perkMul: { goat: 1.5 },
     // menu stance: relaxed, weight on one leg, arms hanging close with the hands turned to the thighs
     idle(p, t, A) {

@@ -100,7 +100,8 @@
   //   * output is its final display colour and is written with alpha 0, which
   //     tells the compositor (gfx.js) to skip tint / bloom / tone mapping.
   // uDim lets it settle a touch in tunnels / at night without ever going grey.
-  VR.charUniforms = { uDim: { value: 0 } };
+  // uHeroA: 0 = 'hero pixel' marker for the post compositor; 1 when drawing straight to the screen (no post)
+  VR.charUniforms = { uDim: { value: 0 }, uHeroA: { value: 0 } };
   const SHADED = `
     vec3 hN = normalize(normal);
     vec3 hKey = vec3(-0.32, 0.58, 0.78);
@@ -119,14 +120,14 @@
     float hRim = pow(1.0 - clamp(dot(hN, normalize(vViewPosition)), 0.0, 1.0), 4.0);
     hShade = min(hShade + hRim * 0.12, vec3(1.0));
     hShade *= 1.0 - uDim;
-    gl_FragColor = vec4(diffuseColor.rgb * pow(hShade, vec3(2.2)), 0.0);`;
+    gl_FragColor = vec4(diffuseColor.rgb * pow(hShade, vec3(2.2)), uHeroA);`;
   const FLAT = `
-    gl_FragColor = vec4(diffuseColor.rgb * pow(1.0 - uDim, 2.2), 0.0);`;
+    gl_FragColor = vec4(diffuseColor.rgb * pow(1.0 - uDim, 2.2), uHeroA);`;
   function heroColour(mat, shaded) {
     mat.toneMapped = false;   // low-quality path (no post): skip renderer ACES too
     mat.onBeforeCompile = (sh) => {
-      sh.uniforms.uDim = VR.charUniforms.uDim;
-      sh.fragmentShader = 'uniform float uDim;\n' + sh.fragmentShader.replace('#include <opaque_fragment>', shaded ? SHADED : FLAT);
+      sh.uniforms.uDim = VR.charUniforms.uDim; sh.uniforms.uHeroA = VR.charUniforms.uHeroA;
+      sh.fragmentShader = 'uniform float uDim, uHeroA;\n' + sh.fragmentShader.replace('#include <opaque_fragment>', shaded ? SHADED : FLAT);
     };
     mat.customProgramCacheKey = () => 'heroColour' + (shaded ? 1 : 0);
     return mat;
